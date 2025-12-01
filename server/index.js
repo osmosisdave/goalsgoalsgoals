@@ -26,13 +26,16 @@ async function connectMongo() {
   if (!MONGODB_URI) return;
   try {
     const { MongoClient } = require('mongodb');
-    mongoClient = new MongoClient(MONGODB_URI);
+    // Use modern topology and enable TLS to ensure Atlas connections
+    // negotiate correctly on hosting platforms like Render.
+    mongoClient = new MongoClient(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true, tls: true });
     await mongoClient.connect();
     const db = mongoClient.db();
     usersCollection = db.collection('users');
     console.log('Connected to MongoDB');
   } catch (e) {
-    console.error('Failed to connect to MongoDB', e);
+    console.error('Failed to connect to MongoDB — connection error details follow:');
+    console.error(e && e.stack ? e.stack : e);
     mongoClient = null;
     usersCollection = null;
   }
