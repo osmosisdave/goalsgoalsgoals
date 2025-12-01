@@ -1,69 +1,76 @@
-// Matches scaffold
+// Matches mock list (50 matches) and basic renderer
 (function () {
-  function apiUrl(path) {
-    const origin = (window && window.GGG_API_ORIGIN) || '';
-    if (origin) return origin.replace(/\/$/, '') + path;
-    return path;
+  function randPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  const teams = [
+    'Aldershot', 'Bayside', 'Campbell', 'Dartford', 'Eagles', 'Falcons', 'Greenford', 'Harrow', 'Ivy Town', 'Jasper',
+    'Kingsley', 'Lakeside', 'Millton', 'Northvale', 'Oakham', 'Parkview', 'Quincy', 'Riverside', 'Sutton', 'Tiverton',
+    'Upton', 'Valley', 'Westford', 'Xford', 'Yewside', 'Zennor'
+  ];
+
+  const comps = ['Premier Cup', 'Championship', 'FA Cup', 'League One', 'League Two'];
+
+  // generate 50 mock matches
+  const mockMatches = [];
+  const start = Date.now();
+  for (let i = 0; i < 50; i++) {
+    let a = randPick(teams);
+    let b = randPick(teams);
+    while (b === a) b = randPick(teams);
+    const kickOff = new Date(start + (i * 1000 * 60 * 60 * 6)); // every 6 hours
+    const competition = randPick(comps);
+    const gameweek = (Math.floor(i / 5) % 38) + 1; // group into weeks of 5 matches
+    mockMatches.push({ id: i + 1, teamA: a, teamB: b, kickOff: kickOff.toISOString(), competition, gameweek });
   }
 
-  function getAuthToken() {
-    return sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || localStorage.getItem('ggg_token') || localStorage.getItem('token') || null;
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString();
   }
 
-  async function fetchMatches() {
-    const res = await fetch(apiUrl('/api/matches'));
-    if (!res.ok) throw new Error('Failed to fetch matches: ' + res.status);
-    return res.json();
-  }
+  function renderList(matches) {
+    const root = document.getElementById('matches-root');
+    if (!root) return;
+    root.innerHTML = '';
 
-  async function createMatch(a, b) {
-    const token = getAuthToken();
-    if (!token) throw new Error('Must be logged in');
-    const res = await fetch(apiUrl('/api/matches'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ playerA: a, playerB: b })
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '8px';
+    header.appendChild(document.createElement('h5')).textContent = `Upcoming Matches (${matches.length})`;
+    root.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'collection';
+
+    matches.forEach(m => {
+      const item = document.createElement('a');
+      item.className = 'collection-item';
+      item.href = '#';
+      const line1 = document.createElement('div');
+      line1.style.display = 'flex';
+      line1.style.justifyContent = 'space-between';
+      const teams = document.createElement('strong');
+      teams.textContent = `${m.teamA} vs ${m.teamB}`;
+      const meta = document.createElement('span');
+      meta.textContent = `GW ${m.gameweek} · ${m.competition}`;
+      line1.appendChild(teams);
+      line1.appendChild(meta);
+
+      const line2 = document.createElement('div');
+      line2.style.color = '#666';
+      line2.textContent = `Kick-off: ${fmtDate(m.kickOff)}`;
+
+      item.appendChild(line1);
+      item.appendChild(line2);
+      list.appendChild(item);
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error('Failed to create match: ' + res.status + ' ' + text);
-    }
-    return res.json();
+
+    root.appendChild(list);
   }
 
-  document.getElementById('create-match').addEventListener('click', async () => {
-    const a = document.getElementById('player-a').value.trim();
-    const b = document.getElementById('player-b').value.trim();
-    if (!a || !b) return alert('Enter both players');
-    try {
-      await createMatch(a, b);
-      alert('Match created');
-      load();
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
+  document.addEventListener('DOMContentLoaded', function () {
+    renderList(mockMatches);
   });
-
-  async function load() {
-    try {
-      const matches = await fetchMatches();
-      const root = document.getElementById('matches-root');
-      if (!matches || matches.length === 0) {
-        root.innerHTML = '<p>No matches found.</p>';
-        return;
-      }
-      const list = document.createElement('ul');
-      matches.forEach(m => {
-        const li = document.createElement('li');
-        li.textContent = (m.playerA || '?') + ' vs ' + (m.playerB || '?') + (m.scheduled ? ' @ ' + m.scheduled : '');
-        list.appendChild(li);
-      });
-      root.innerHTML = '';
-      root.appendChild(list);
-    } catch (err) {
-      document.getElementById('matches-root').innerHTML = '<p style="color:red">Failed to load matches: ' + err.message + '</p>';
-    }
-  }
-
-  load();
 })();
