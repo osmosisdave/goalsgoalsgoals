@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Goals Goals Goals</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-wrapper blue darken-2">
+      <div class="container">
+        <a href="index.html" class="brand-logo">Goals Goals Goals</a>
+        <ul class="right hide-on-med-and-down">
+          <li><a id="logoutBtn">Logout</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container section">
+    <div class="row">
+      <div class="col s12">
+        <h4>Admin Dashboard</h4>
+        <p id="adminWelcome"></p>
+        <h5>Static Users</h5>
+        <ul id="userList" class="collection"></ul>
+
+        <h5>Create User</h5>
+        <form id="createUserForm" class="row">
+          <div class="input-field col s12 m4">
+            <input id="newUsername" type="text" required>
+            <label for="newUsername">Username</label>
+          </div>
+          <div class="input-field col s12 m4">
+            <input id="newPassword" type="password" required>
+            <label for="newPassword">Password</label>
+          </div>
+          <div class="input-field col s12 m4">
+            <input id="newRole" type="text" value="user">
+            <label for="newRole">Role</label>
+          </div>
+          <div class="col s12">
+            <button class="btn waves-effect waves-light" type="submit">Create user</button>
+            <span id="createUserMsg" class="" style="margin-left:1rem"></span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script src="assets/js/config.js"></script>
+  <script type="module" src="assets/js/auth.js"></script>
+</body>
+</html>
