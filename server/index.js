@@ -104,7 +104,14 @@ function verifyToken(token) {
 }
 
 const app = express();
-app.use(cors());
+// Configure CORS to allow only the frontend origin. Use ALLOWED_ORIGIN env var
+// in production; fallback to the deployed Pages origin for convenience.
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://goalsgoalsgoals.onrender.com';
+if (ALLOWED_ORIGIN) {
+  app.use(cors({ origin: ALLOWED_ORIGIN }));
+} else {
+  app.use(cors());
+}
 app.use(bodyParser.json());
 
 // Serve the static site from the parent folder for local development
