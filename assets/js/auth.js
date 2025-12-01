@@ -74,14 +74,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const ok = await login(username, password);
             const err = document.getElementById('loginError');
             if (ok) {
-                window.location.href = 'admin.html';
-            }
+                    // After successful login, go to the home page
+                    window.location.href = 'index.html';
+                }
             else {
                 if (err)
                     err.textContent = 'Invalid username or password';
             }
         });
     }
+    // If we're on admin.html require auth as before
     if (window.location.pathname.endsWith('admin.html')) {
         requireAuth();
         currentUser().then((user) => {
@@ -149,6 +151,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+    }
+    // If we're on the login page and already authenticated, redirect to home
+    if (window.location.pathname.endsWith('login.html')) {
+        currentUser().then(u => {
+            if (u) window.location.href = 'index.html';
+        });
     }
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {

@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Login — Goals Goals Goals</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>League Management — Goals Goals Goals</title>
   <link rel="stylesheet" href="assets/css/styles.css">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
@@ -32,37 +32,40 @@
   </ul>
 
   <main class="container section">
-    <div class="row">
-      <div class="col s12 m6 offset-m3">
-        <div class="card">
-          <div class="card-content">
-            <span class="card-title">Login</span>
-            <form id="loginForm">
-              <div class="input-field">
-                <input id="username" type="text" required>
-                <label for="username">Username</label>
-              </div>
-              <div class="input-field">
-                <input id="password" type="password" required>
-                <label for="password">Password</label>
-              </div>
-              <div class="row">
-                <div class="col s12">
-                  <button class="btn waves-effect waves-light" type="submit">Login</button>
-                  <a class="btn-flat" href="index.html">Cancel</a>
-                </div>
-              </div>
-            </form>
-            <p id="loginError" class="red-text"></p>
-          </div>
-        </div>
-      </div>
+    <h1>League Management (Admin)</h1>
+    <p>This page is restricted to administrators. Use this interface to create/delete leagues and assign users to leagues.</p>
+
+    <div id="lm-root">
+      <p>Loading admin tools…</p>
     </div>
   </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="assets/js/config.js"></script>
   <script src="assets/js/site-header.js"></script>
-  <script type="module" src="assets/js/auth.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script type="module">
+    import { currentUser } from './assets/js/auth.js';
+    (async function() {
+      const u = await currentUser();
+      if (!u || u.role !== 'admin') {
+        // redirect non-admins to home
+        window.location.href = 'index.html';
+        return;
+      }
+      const root = document.getElementById('lm-root');
+      root.innerHTML = `
+        <section>
+          <h2>Users</h2>
+          <p>Here you will be able to list users and assign them to leagues (scaffold).</p>
+          <div id="lm-users">(user list placeholder)</div>
+        </section>
+        <section>
+          <h2>Leagues</h2>
+          <p>Here you will be able to create and delete leagues (scaffold).</p>
+          <div id="lm-leagues">(league list placeholder)</div>
+        </section>
+      `;
+    })();
+  </script>
 </body>
 </html>
