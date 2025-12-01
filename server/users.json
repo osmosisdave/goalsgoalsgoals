@@ -1,3 +1,9 @@
 {
-  "users": []
+  "users": [
+    {
+      "username": "admin",
+      "passwordHash": "$2a$10$bhhRgyTf.6O3ylgPQ4lFT.ZiVZN4in3YDaFuOtR2jQ/Z.DBXCZXkK",
+      "role": "admin"
+    }
+  ]
 }
