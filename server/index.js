@@ -36,6 +36,25 @@ async function connectMongo() {
   } catch (e) {
     console.error('Failed to connect to MongoDB — connection error details follow:');
     console.error(e && e.stack ? e.stack : e);
+    // If the connection failed and the operator enabled the debug bypass
+    // via env var, try again with invalid-certificate allowance to help
+    // determine whether certificate validation is the root cause.
+    if (process.env.DEBUG_ALLOW_TLS_BYPASS === 'true') {
+      console.warn('DEBUG_ALLOW_TLS_BYPASS=true — attempting secondary connect with tlsAllowInvalidCertificates (diagnostic only)');
+      try {
+        const { MongoClient: MC2 } = require('mongodb');
+        const fallbackClient = new MC2(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true, tls: true, tlsAllowInvalidCertificates: true, tlsAllowInvalidHostnames: true });
+        await fallbackClient.connect();
+        const db2 = fallbackClient.db();
+        usersCollection = db2.collection('users');
+        mongoClient = fallbackClient;
+        console.warn('Secondary connect succeeded with tlsAllowInvalidCertificates=true — certificate validation appears to be the blocker.');
+        return;
+      } catch (err2) {
+        console.error('Secondary diagnostic connect also failed:');
+        console.error(err2 && err2.stack ? err2.stack : err2);
+      }
+    }
     mongoClient = null;
     usersCollection = null;
   }
