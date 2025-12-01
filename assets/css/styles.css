@@ -1,0 +1,16 @@
+/* Minimal theme overrides; rely on Materialize for layout */
+*{box-sizing:border-box}
+:root{--bg:#ffffff;--fg:#0b0b0b}
+body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;color:var(--fg);background:var(--bg)}
+.dark{background:#0b1014;color:#e6eef6}
+.container{max-width:1000px;margin:0 auto;padding:1rem}
+
+/* Small helpers */
+.hero{padding:3.5rem 1rem}
+.features .card{height:100%}
+.brand-logo{font-weight:700}
+.site-footer{padding:1rem 0;margin-top:2rem}
+/* small spacing tweaks for hero */
+.header{margin-top:0.5rem}
+.flow-text{max-width:900px;margin:0 auto}
+

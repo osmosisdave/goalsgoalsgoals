@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Goals Goals Goals</title>
+  <meta name="description" content="A small prototype website ready for GitHub Pages deployment." />
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-wrapper blue darken-2">
+      <div class="container">
+        <a href="#" class="brand-logo">Goals Goals Goals</a>
+        <a href="#" data-target="mobile-nav" class="sidenav-trigger right"><i class="material-icons">menu</i></a>
+        <ul id="nav-desktop" class="right hide-on-med-and-down">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="login.html">Login</a></li>
+          <li><a href="#" data-theme-toggle class="waves-effect"><i class="material-icons">brightness_6</i></a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <ul class="sidenav" id="mobile-nav">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#about">About</a></li>
+    <li><a href="#contact">Contact</a></li>
+    <li><a href="#" data-theme-toggle class="waves-effect"><i class="material-icons">brightness_6</i> Toggle theme</a></li>
+  </ul>
+
+  <main>
+    <!-- Hero -->
+    <div class="section no-pad-bot blue lighten-5">
+      <div class="container">
+        <div class="row">
+          <div class="col s12 center">
+            <h1 class="header">Simple Prototype Website</h1>
+            <div class="row center">
+              <p class="flow-text">Fast, responsive, and ready to publish to GitHub Pages from the <code>docs/</code> folder.</p>
+            </div>
+            <div class="row center">
+              <a href="#features" class="btn-large waves-effect waves-light blue darken-2">See features</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div id="features" class="container section">
+      <div class="row">
+        <div class="col s12 m4">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">Responsive layout</span>
+              <p>Works on mobile and desktop using Materialize grid and components.</p>
+            </div>
+            <div class="card-action">
+              <a href="#">Learn more</a>
+            </div>
+          </div>
+        </div>
+        <div class="col s12 m4">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">Static & deployable</span>
+              <p>Push to GitHub and enable Pages for the <code>docs/</code> folder.</p>
+            </div>
+            <div class="card-action">
+              <a href="#">Deploy</a>
+            </div>
+          </div>
+        </div>
+        <div class="col s12 m4">
+          <div class="card">
+            <div class="card-content">
+              <span class="card-title">Small JavaScript</span>
+              <p>Tiny interactions managed in TypeScript. No frameworks required.</p>
+            </div>
+            <div class="card-action">
+              <a href="#">See code</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div id="about" class="container section">
+      <div class="card">
+        <div class="card-content">
+          <span class="card-title">About this prototype</span>
+          <p>This is a minimal, easily customizable prototype you can extend. Use it as a starting point for landing pages, docs, or simple apps.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact removed; use Login to access admin features -->
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <small>&copy; <span id="year"></span> Prototype Website</small>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script src="assets/js/config.js"></script>
+  <script type="module" src="assets/js/main.js"></script>
+</body>
+</html>
