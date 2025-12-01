@@ -73,13 +73,14 @@ async function ensureUsersFile() {
 
 async function readUsers() {
   if (usersCollection) {
-    const docs = await usersCollection.find({}, { projection: { _id: 0, username: 1, role: 1 } }).toArray();
-    // return array of { username, role }
-    return docs.map((d) => ({ username: d.username, role: d.role }));
+    const docs = await usersCollection.find({}, { projection: { _id: 0, username: 1, role: 1, league: 1 } }).toArray();
+    // return array of { username, role, league }
+    return docs.map((d) => ({ username: d.username, role: d.role, league: d.league || null }));
   }
   await ensureUsersFile();
   const data = await fs.readJson(USERS_FILE);
-  return data.users || [];
+  // Ensure each user has explicit league key (may be undefined)
+  return (data.users || []).map((u) => ({ username: u.username, role: u.role, league: u.league || null, passwordHash: u.passwordHash }));
 }
 
 async function getUserForAuth(username) {
@@ -95,7 +96,7 @@ async function writeUsers(users) {
   if (usersCollection) {
     // replace collection contents (used rarely)
     await usersCollection.deleteMany({});
-    if (users.length) await usersCollection.insertMany(users.map((u) => ({ username: u.username, passwordHash: u.passwordHash, role: u.role })));
+    if (users.length) await usersCollection.insertMany(users.map((u) => ({ username: u.username, passwordHash: u.passwordHash, role: u.role, league: u.league || null })));
     return;
   }
   await fs.writeJson(USERS_FILE, { users }, { spaces: 2 });
@@ -112,6 +113,83 @@ async function createUserInStore({ username, passwordHash, role }) {
   data.users.push({ username, passwordHash, role });
   await fs.writeJson(USERS_FILE, data, { spaces: 2 });
 }
+
+// Leagues store (Mongo collection 'leagues' or file fallback)
+const LEAGUES_FILE = path.join(__dirname, 'leagues.json');
+
+async function ensureLeaguesFile() {
+  const exists = await fs.pathExists(LEAGUES_FILE);
+  if (!exists) {
+    await fs.writeJson(LEAGUES_FILE, { leagues: [] }, { spaces: 2 });
+  }
+}
+
+async function readLeagues() {
+  if (mongoClient) {
+    try {
+      const db = mongoClient.db();
+      const coll = db.collection('leagues');
+      const docs = await coll.find({}, { projection: { _id: 0, name: 1 } }).toArray();
+      return docs.map((d) => d.name);
+    } catch (e) {
+      console.error('Error reading leagues from MongoDB', e && e.stack ? e.stack : e);
+    }
+  }
+  await ensureLeaguesFile();
+  const data = await fs.readJson(LEAGUES_FILE);
+  return data.leagues || [];
+}
+
+async function createLeagueInStore(name) {
+  if (!name) throw new Error('Missing league name');
+  if (mongoClient) {
+    const db = mongoClient.db();
+    const coll = db.collection('leagues');
+    const existing = await coll.findOne({ name });
+    if (existing) return false;
+    await coll.insertOne({ name });
+    return true;
+  }
+  await ensureLeaguesFile();
+  const data = await fs.readJson(LEAGUES_FILE);
+  data.leagues = data.leagues || [];
+  if (data.leagues.includes(name)) return false;
+  data.leagues.push(name);
+  await fs.writeJson(LEAGUES_FILE, data, { spaces: 2 });
+  return true;
+}
+
+async function deleteLeagueInStore(name) {
+  if (!name) throw new Error('Missing league name');
+  if (mongoClient) {
+    const db = mongoClient.db();
+    const coll = db.collection('leagues');
+    await coll.deleteOne({ name });
+    // unset league for users
+    if (usersCollection) {
+      await usersCollection.updateMany({ league: name }, { $unset: { league: '' } });
+    } else {
+      // file fallback: update users.json
+      await ensureUsersFile();
+      const data = await fs.readJson(USERS_FILE);
+      data.users = (data.users || []).map((u) => (u.league === name ? Object.assign({}, u, { league: null }) : u));
+      await fs.writeJson(USERS_FILE, data, { spaces: 2 });
+    }
+    return true;
+  }
+  await ensureLeaguesFile();
+  const data = await fs.readJson(LEAGUES_FILE);
+  data.leagues = (data.leagues || []).filter((l) => l !== name);
+  await fs.writeJson(LEAGUES_FILE, data, { spaces: 2 });
+  // update users file
+  await ensureUsersFile();
+  const udata = await fs.readJson(USERS_FILE);
+  udata.users = (udata.users || []).map((u) => (u.league === name ? Object.assign({}, u, { league: null }) : u));
+  await fs.writeJson(USERS_FILE, udata, { spaces: 2 });
+  return true;
+}
+
+
 
 function createToken(user) {
   return jwt.sign({ sub: user.username, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
@@ -139,6 +217,85 @@ app.use(bodyParser.json());
 // Serve the static site from the parent folder for local development
 const staticRoot = path.join(__dirname, '..');
 app.use(express.static(staticRoot));
+
+// Admin-only: update a user's league assignment
+app.put('/api/users/:username/league', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  const username = req.params.username;
+  const { league } = req.body || {};
+  if (!username) return res.status(400).json({ error: 'Missing username' });
+
+  if (usersCollection) {
+    const existing = await usersCollection.findOne({ username });
+    if (!existing) return res.status(404).json({ error: 'User not found' });
+    await usersCollection.updateOne({ username }, { $set: { league: league || null } });
+    return res.json({ username, league: league || null });
+  }
+
+  // File store
+  await ensureUsersFile();
+  const data = await fs.readJson(USERS_FILE);
+  data.users = data.users || [];
+  const idx = data.users.findIndex((u) => u.username === username);
+  if (idx < 0) return res.status(404).json({ error: 'User not found' });
+  data.users[idx].league = league || null;
+  await fs.writeJson(USERS_FILE, data, { spaces: 2 });
+  return res.json({ username, league: league || null });
+});
+
+// Public: list leagues
+app.get('/api/leagues', async (req, res) => {
+  try {
+    const leagues = await readLeagues();
+    res.json(leagues);
+  } catch (e) {
+    console.error('Failed to list leagues', e && e.stack ? e.stack : e);
+    res.status(500).json({ error: 'Failed to list leagues' });
+  }
+});
+
+// Admin-only: create a league
+app.post('/api/leagues', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ error: 'Missing league name' });
+  try {
+    const created = await createLeagueInStore(name);
+    if (!created) return res.status(409).json({ error: 'League exists' });
+    res.status(201).json({ name });
+  } catch (e) {
+    console.error('Failed to create league', e && e.stack ? e.stack : e);
+    res.status(500).json({ error: 'Failed to create league' });
+  }
+});
+
+// Admin-only: delete a league
+app.delete('/api/leagues/:name', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const name = req.params.name;
+  if (!name) return res.status(400).json({ error: 'Missing league name' });
+  try {
+    await deleteLeagueInStore(name);
+    res.json({ name });
+  } catch (e) {
+    console.error('Failed to delete league', e && e.stack ? e.stack : e);
+    res.status(500).json({ error: 'Failed to delete league' });
+  }
+});
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
@@ -168,7 +325,7 @@ app.get('/api/users', async (req, res) => {
   if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
   if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const users = await readUsers();
-  res.json(users.map((u) => ({ username: u.username, role: u.role })));
+  res.json(users.map((u) => ({ username: u.username, role: u.role, league: u.league || null })));
 });
 
 // Protected: create user (admin-only)
@@ -195,7 +352,7 @@ app.get('/api/admin/users', async (req, res) => {
   if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
   if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const users = await readUsers();
-  res.json(users.map((u) => ({ username: u.username, role: u.role })));
+  res.json(users.map((u) => ({ username: u.username, role: u.role, league: u.league || null })));
 });
 
 const port = process.env.PORT || 4000;

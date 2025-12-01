@@ -13,88 +13,68 @@
   <nav>
     <div class="nav-wrapper blue darken-2">
       <div class="container">
-        <a href="#" class="brand-logo">Goals Goals Goals</a>
+        <a href="index.html" class="brand-logo">Goals Goals Goals</a>
         <a href="#" data-target="mobile-nav" class="sidenav-trigger right"><i class="material-icons">menu</i></a>
         <ul id="nav-desktop" class="right hide-on-med-and-down">
-          <li><a href="#features">Features</a></li>
-          <li><a href="#about">About</a></li>
-          <li><a href="login.html">Login</a></li>
-          <li><a href="#" data-theme-toggle class="waves-effect"><i class="material-icons">brightness_6</i></a></li>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="leagues.html">Leagues</a></li>
+          <li><a href="matches.html">Matches</a></li>
+          <li id="nav-login-link"><a href="login.html">Login</a></li>
         </ul>
       </div>
     </div>
   </nav>
 
   <ul class="sidenav" id="mobile-nav">
-    <li><a href="#features">Features</a></li>
-    <li><a href="#about">About</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#" data-theme-toggle class="waves-effect"><i class="material-icons">brightness_6</i> Toggle theme</a></li>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="leagues.html">Leagues</a></li>
+    <li><a href="matches.html">Matches</a></li>
+    <li id="nav-login-link-mobile"><a href="login.html">Login</a></li>
   </ul>
 
   <main>
-    <!-- Hero -->
-    <div class="section no-pad-bot blue lighten-5">
-      <div class="container">
-        <div class="row">
-          <div class="col s12 center">
-            <h1 class="header">Simple Prototype Website</h1>
-            <div class="row center">
-              <p class="flow-text">Fast, responsive, and ready to publish to GitHub Pages from the <code>docs/</code> folder.</p>
-            </div>
-            <div class="row center">
-              <a href="#features" class="btn-large waves-effect waves-light blue darken-2">See features</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Features -->
-    <div id="features" class="container section">
+    <!-- Simplified Tiles: Leagues + Matches -->
+    <div class="container section">
       <div class="row">
         <div class="col s12 m4">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">Responsive layout</span>
-              <p>Works on mobile and desktop using Materialize grid and components.</p>
+          <a href="leagues.html">
+            <div class="card hoverable">
+              <div class="card-content">
+                <span class="card-title">Leagues</span>
+                <p>View and manage league tables.</p>
+              </div>
             </div>
-            <div class="card-action">
-              <a href="#">Learn more</a>
-            </div>
-          </div>
+          </a>
         </div>
         <div class="col s12 m4">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">Static & deployable</span>
-              <p>Push to GitHub and enable Pages for the <code>docs/</code> folder.</p>
+          <a href="matches.html">
+            <div class="card hoverable">
+              <div class="card-content">
+                <span class="card-title">Matches</span>
+                <p>Schedule and view matches.</p>
+              </div>
             </div>
-            <div class="card-action">
-              <a href="#">Deploy</a>
-            </div>
-          </div>
+          </a>
         </div>
-        <div class="col s12 m4">
-          <div class="card">
-            <div class="card-content">
-              <span class="card-title">Small JavaScript</span>
-              <p>Tiny interactions managed in TypeScript. No frameworks required.</p>
+        <div id="admin-tile" class="col s12 m4" style="display:none">
+          <a href="admin.html">
+            <div class="card hoverable">
+              <div class="card-content">
+                <span class="card-title">User Administration</span>
+                <p>Manage users and roles (admin only).</p>
+              </div>
             </div>
-            <div class="card-action">
-              <a href="#">See code</a>
-            </div>
-          </div>
+          </a>
         </div>
-      </div>
-    </div>
-
-    <!-- About -->
-    <div id="about" class="container section">
-      <div class="card">
-        <div class="card-content">
-          <span class="card-title">About this prototype</span>
-          <p>This is a minimal, easily customizable prototype you can extend. Use it as a starting point for landing pages, docs, or simple apps.</p>
+        <div id="league-mgmt-tile" class="col s12 m4" style="display:none">
+          <a href="league-management.html">
+            <div class="card hoverable">
+              <div class="card-content">
+                <span class="card-title">League Management</span>
+                <p>Create/delete leagues and assign users (admin only).</p>
+              </div>
+            </div>
+          </a>
         </div>
       </div>
     </div>
@@ -110,6 +90,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="assets/js/config.js"></script>
+  <script src="assets/js/home-auth.js"></script>
   <script type="module" src="assets/js/main.js"></script>
 </body>
 </html>
