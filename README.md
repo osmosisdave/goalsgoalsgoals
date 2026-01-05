@@ -158,7 +158,14 @@ Updating the frontend to call the deployed API
 - The static site currently calls relative endpoints like `/api/login`. When the frontend is served from GitHub Pages (`https://username.github.io/repo`) it will not be able to reach your API unless the API is on the same origin or the frontend uses the full API origin.
 - Option A (recommended): Configurable API origin. Add a short `assets/js/config.js` (or edit `index.html` to set `window.GGG_API_ORIGIN`) and change client fetch calls to use `const base = window.GGG_API_ORIGIN || ''` then `fetch(base + '/api/login', ...)`.
 
-Example `index.html` snippet (insert in `<head>` before app scripts):
+CI-based configuration (recommended)
+- This repo's GitHub Actions workflow injects the production API origin from a repository Actions secret named `API_ORIGIN` into `assets/js/config.js` at deploy time.
+- Set the secret under GitHub repo Settings -> Secrets and variables -> Actions -> New repository secret:
+	- Name: `API_ORIGIN`
+	- Value: `https://your-api-host.example.com`
+- On push to `main`, CI will build TypeScript and publish to GitHub Pages with `window.GGG_API_ORIGIN` set to your secret value.
+
+Manual `index.html` snippet (alternative; insert in `<head>` before app scripts):
 
 ```html
 <script>

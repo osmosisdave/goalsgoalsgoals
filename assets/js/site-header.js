@@ -1,5 +1,6 @@
 // Site header helper: display logged-in username and show admin-only tile (no redirects)
 (function () {
+  const USE_MOCK = !!(window && window.GGG_USE_MOCK_API);
   function apiUrl(path) {
     const origin = (window && window.GGG_API_ORIGIN) || '';
     if (origin) return origin.replace(/\/$/, '') + path;
@@ -13,6 +14,14 @@
   async function fetchMe() {
     const token = getAuthToken();
     if (!token) return null;
+    if (USE_MOCK && String(token).startsWith('mock.')) {
+      try {
+        const payload = JSON.parse(atob(String(token).slice(5)));
+        return { username: payload.sub, role: payload.role };
+      } catch (e) {
+        return { username: 'admin', role: 'admin' };
+      }
+    }
     try {
       const res = await fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } });
       if (!res.ok) return null;
@@ -56,7 +65,23 @@
 
   (async function init() {
     try {
+      // Redirect to login if unauthenticated on any page except the login page
+      const path = (window && window.location && window.location.pathname) || '';
+      const onLoginPage = /(^|\/)login\.html$/.test(path);
+      if (!onLoginPage) {
+        const token = getAuthToken();
+        if (!token) {
+          window.location.href = 'login.html';
+          return;
+        }
+      }
+
       const me = await fetchMe();
+      if (!onLoginPage && !me) {
+        // Token is invalid or user fetch failed; return to login
+        window.location.href = 'login.html';
+        return;
+      }
       if (me && (me.username || me.sub)) {
         const username = me.username || me.sub;
         setNavToUsername(username);
