@@ -25,7 +25,7 @@ const USERS_FILE = path.join(__dirname, 'users.json');
   }
   const username = 'admin';
   const role = 'admin';
-  const passwordHash = await bcrypt.hash(adminPass, 10);
+  const passwordHash = await bcrypt.hash(adminPass, 12);
 
   if (MONGODB_URI) {
     try {
