@@ -1,5 +1,6 @@
 // Home auth helper: replace 'Login' with username when logged in
 (function () {
+  const USE_MOCK = !!(window && window.GGG_USE_MOCK_API);
   function apiUrl(path) {
     const origin = (window && window.GGG_API_ORIGIN) || '';
     if (origin) return origin.replace(/\/$/, '') + path;
@@ -25,6 +26,14 @@
 
   async function fetchMe(token) {
     if (!token) return null;
+    if (USE_MOCK && String(token).startsWith('mock.')) {
+      try {
+        const payload = JSON.parse(atob(String(token).slice(5)));
+        return { username: payload.sub, role: payload.role };
+      } catch (e) {
+        return { username: 'admin', role: 'admin' };
+      }
+    }
     try {
       const res = await fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } });
       if (!res.ok) return null;
@@ -69,8 +78,8 @@
 
   (async function init() {
     const token = getAuthToken();
+    // Redirect unauthenticated users to the login page
     if (!token) {
-      // If there's no token, redirect to the login page so initial site load shows login
       window.location.href = 'login.html';
       return;
     }

@@ -1,9 +1,19 @@
 const TOKEN_KEY = 'ggg_token';
+const USE_MOCK = !!(window && window.GGG_USE_MOCK_API);
 // API origin can be set on the page via `window.GGG_API_ORIGIN`.
 // If empty, relative paths are used (useful for local dev where server and site are same origin).
 const API_ORIGIN = window.GGG_API_ORIGIN ? String(window.GGG_API_ORIGIN).replace(/\/$/, '') : '';
 function apiUrl(path) { return (API_ORIGIN ? API_ORIGIN : '') + path; }
 export async function login(username, password) {
+    if (USE_MOCK) {
+        const ok = (username === 'admin' && password === 'admin123') || (username === 'user' && password === 'user123');
+        if (!ok) return false;
+        const role = username === 'admin' ? 'admin' : 'user';
+        const payload = { sub: username, role };
+        const token = 'mock.' + btoa(JSON.stringify(payload));
+        sessionStorage.setItem(TOKEN_KEY, token);
+        return true;
+    }
     try {
         const res = await fetch(apiUrl('/api/login'), {
             method: 'POST',
@@ -30,6 +40,16 @@ export async function currentUser() {
     const token = getToken();
     if (!token)
         return null;
+    if (USE_MOCK && token.startsWith('mock.')) {
+        try {
+            const json = atob(token.slice(5));
+            const payload = JSON.parse(json);
+            return { username: payload.sub, role: payload.role };
+        }
+        catch (e) {
+            return { username: 'admin', role: 'admin' };
+        }
+    }
     try {
         const res = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok)
@@ -94,23 +114,37 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fetch users from API
         const list = document.getElementById('userList');
         if (list) {
-            const token = getToken();
-            fetch(apiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
-                .then((r) => r.json())
-                .then((users) => {
-                users.forEach((u) => {
+            if (USE_MOCK) {
+                const mockUsers = [
+                    { username: 'admin', role: 'admin' },
+                    { username: 'user', role: 'user' },
+                ];
+                mockUsers.forEach((u) => {
                     const li = document.createElement('li');
                     li.className = 'collection-item';
                     li.textContent = `${u.username} — ${u.role || 'user'}`;
                     list.appendChild(li);
                 });
-            })
-                .catch(() => {
-                const li = document.createElement('li');
-                li.className = 'collection-item red-text';
-                li.textContent = 'Failed to load users (are you authenticated?)';
-                list.appendChild(li);
-            });
+            }
+            else {
+                const token = getToken();
+                fetch(apiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
+                    .then((r) => r.json())
+                    .then((users) => {
+                    users.forEach((u) => {
+                        const li = document.createElement('li');
+                        li.className = 'collection-item';
+                        li.textContent = `${u.username} — ${u.role || 'user'}`;
+                        list.appendChild(li);
+                    });
+                })
+                    .catch(() => {
+                    const li = document.createElement('li');
+                    li.className = 'collection-item red-text';
+                    li.textContent = 'Failed to load users (are you authenticated?)';
+                    list.appendChild(li);
+                });
+            }
         }
         // Create user form handling
         const createForm = document.getElementById('createUserForm');
@@ -122,26 +156,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 const r = document.getElementById('newRole').value || 'user';
                 const msg = document.getElementById('createUserMsg');
                 try {
-                    await createUser(u, p, r);
-                    if (msg) {
-                        msg.textContent = 'Created.';
-                        msg.className = 'green-text';
-                    }
-                    // refresh list
-                    if (!list)
-                        return;
-                    list.innerHTML = '';
-                    const token = getToken();
-                    fetch(apiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
-                        .then((r) => r.json())
-                        .then((users) => {
-                        users.forEach((u) => {
+                    if (USE_MOCK) {
+                        if (msg) { msg.textContent = 'Created.'; msg.className = 'green-text'; }
+                        if (list) {
                             const li = document.createElement('li');
                             li.className = 'collection-item';
-                            li.textContent = `${u.username} — ${u.role || 'user'}`;
+                            li.textContent = `${u} — ${r || 'user'}`;
                             list.appendChild(li);
+                        }
+                    } else {
+                        await createUser(u, p, r);
+                        if (msg) {
+                            msg.textContent = 'Created.';
+                            msg.className = 'green-text';
+                        }
+                        // refresh list
+                        if (!list)
+                            return;
+                        list.innerHTML = '';
+                        const token = getToken();
+                        fetch(apiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
+                            .then((r) => r.json())
+                            .then((users) => {
+                            users.forEach((u) => {
+                                const li = document.createElement('li');
+                                li.className = 'collection-item';
+                                li.textContent = `${u.username} — ${u.role || 'user'}`;
+                                list.appendChild(li);
+                            });
                         });
-                    });
+                    }
                 }
                 catch (e) {
                     if (msg) {
