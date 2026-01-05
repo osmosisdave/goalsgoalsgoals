@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const ok = await login(username, password);
             const err = document.getElementById('loginError');
             if (ok) {
-                window.location.href = 'admin.html';
+                window.location.href = 'index.html';
             }
             else {
                 if (err)

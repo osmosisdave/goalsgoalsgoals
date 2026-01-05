@@ -214,8 +214,20 @@ if (ALLOWED_ORIGIN) {
 }
 app.use(bodyParser.json());
 
+// Refuse to start in production without a strong JWT secret
+if (!process.env.JWT_SECRET || JWT_SECRET === 'dev_secret_change_me') {
+  console.warn('Warning: JWT_SECRET is not set or using a weak default.');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('In production, JWT_SECRET must be provided. Exiting.');
+    process.exit(1);
+  }
+}
+
 // Serve the static site from the parent folder for local development
 const staticRoot = path.join(__dirname, '..');
+// Explicitly block access to the server/ folder and sensitive files when using static serving
+app.use('/server', (req, res) => res.status(404).send('Not found'));
+app.get(['/admin.token', '/server/users.json', '/server/leagues.json'], (req, res) => res.status(404).send('Not found'));
 app.use(express.static(staticRoot));
 
 // Admin-only: update a user's league assignment
@@ -339,7 +351,7 @@ app.post('/api/users', async (req, res) => {
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   const existing = await getUserForAuth(username);
   if (existing) return res.status(409).json({ error: 'User exists' });
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await bcrypt.hash(password, 12);
   await createUserInStore({ username, passwordHash: hash, role: role || 'user' });
   res.status(201).json({ username, role: role || 'user' });
 });

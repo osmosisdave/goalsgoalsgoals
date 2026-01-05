@@ -52,7 +52,7 @@ async function run() {
     process.exit(3);
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(password, 12);
 
   if (MONGODB_URI) {
     console.log('Connecting to MongoDB...');
