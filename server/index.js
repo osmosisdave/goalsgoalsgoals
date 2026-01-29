@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs-extra');
 const path = require('path');
 const cors = require('cors');
+const apiRateLimiter = require('./api-rate-limiter');
 
 // Load .env into process.env when present (for local development)
 try {
@@ -204,14 +205,24 @@ function verifyToken(token) {
 }
 
 const app = express();
-// Configure CORS to allow only the frontend origin. Use ALLOWED_ORIGIN env var
-// in production; fallback to the deployed Pages origin for convenience.
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://goalsgoalsgoals.onrender.com';
-if (ALLOWED_ORIGIN) {
-  app.use(cors({ origin: ALLOWED_ORIGIN }));
-} else {
-  app.use(cors());
-}
+// Configure CORS to allow both local development and production origins
+// Set ALLOWED_ORIGIN env var to override (can be comma-separated list)
+const allowedOrigins = process.env.ALLOWED_ORIGIN 
+  ? process.env.ALLOWED_ORIGIN.split(',').map(o => o.trim())
+  : ['http://localhost:8000', 'https://goalsgoalsgoals.onrender.com'];
+
+app.use(cors({ 
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true 
+}));
 app.use(bodyParser.json());
 
 // Refuse to start in production without a strong JWT secret
@@ -367,11 +378,429 @@ app.get('/api/admin/users', async (req, res) => {
   res.json(users.map((u) => ({ username: u.username, role: u.role, league: u.league || null })));
 });
 
+// ===== API Rate Limiter Endpoints =====
+
+// Get current API usage status (public)
+app.get('/api/rate-limit/status', async (req, res) => {
+  try {
+    const status = await apiRateLimiter.getStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('Error getting rate limit status:', error);
+    res.status(500).json({ error: 'Failed to get rate limit status' });
+  }
+});
+
+// Get detailed analytics (admin only)
+app.get('/api/rate-limit/analytics', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    const analytics = await apiRateLimiter.getAnalytics();
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error getting analytics:', error);
+    res.status(500).json({ error: 'Failed to get analytics' });
+  }
+});
+
+// Reset rate limiter (admin only, for testing)
+app.post('/api/rate-limit/reset', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    await apiRateLimiter.reset();
+    res.json({ message: 'Rate limiter reset successfully' });
+  } catch (error) {
+    console.error('Error resetting rate limiter:', error);
+    res.status(500).json({ error: 'Failed to reset rate limiter' });
+  }
+});
+
+// Mock external API call endpoint (for testing rate limiting)
+app.post('/api/football/fixtures', async (req, res) => {
+  try {
+    // Check rate limit
+    const canProceed = await apiRateLimiter.canMakeCall();
+    
+    if (!canProceed) {
+      const status = await apiRateLimiter.getStatus();
+      return res.status(429).json({
+        error: 'API rate limit reached',
+        message: `You have reached the weekly limit of ${status.softLimit} API calls. The limit will reset when the oldest call expires.`,
+        status: {
+          count: status.count,
+          limit: status.softLimit,
+          oldestCallExpiry: status.oldestCallExpiry
+        }
+      });
+    }
+
+    // Get user from token (optional)
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer /i, '');
+    const decoded = verifyToken(token);
+    const user = decoded ? decoded.sub : 'anonymous';
+
+    // Record the API call
+    await apiRateLimiter.recordCall('/football/fixtures', user, req.body);
+
+    // Simulate API response (in production, this would call the real API)
+    res.json({
+      message: 'API call successful (mocked)',
+      data: {
+        fixtures: [],
+        // Mock response data would go here
+      },
+      rateLimitStatus: await apiRateLimiter.getStatus()
+    });
+  } catch (error) {
+    console.error('Error in mock API call:', error);
+    res.status(500).json({ error: 'API call failed' });
+  }
+});
+
+// Mock standings API endpoint
+app.post('/api/football/standings', async (req, res) => {
+  try {
+    const canProceed = await apiRateLimiter.canMakeCall();
+    
+    if (!canProceed) {
+      const status = await apiRateLimiter.getStatus();
+      return res.status(429).json({
+        error: 'API rate limit reached',
+        message: `You have reached the weekly limit of ${status.softLimit} API calls.`,
+        status
+      });
+    }
+
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer /i, '');
+    const decoded = verifyToken(token);
+    const user = decoded ? decoded.sub : 'anonymous';
+
+    await apiRateLimiter.recordCall('/football/standings', user, req.body);
+
+    res.json({
+      message: 'API call successful (mocked)',
+      data: { standings: [] },
+      rateLimitStatus: await apiRateLimiter.getStatus()
+    });
+  } catch (error) {
+    console.error('Error in mock API call:', error);
+    res.status(500).json({ error: 'API call failed' });
+  }
+});
+
+// Get fixtures from database (supports filtering by league, season, date, status)
+app.get('/api/football/fixtures', async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected', message: 'MongoDB is not available. Please check MONGODB_URI in .env' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    const query = {};
+    
+    // Filter by league
+    if (req.query.league) {
+      query['league.id'] = parseInt(req.query.league);
+    }
+    
+    // Filter by season
+    if (req.query.season) {
+      query['league.season'] = parseInt(req.query.season);
+    }
+    
+    // Filter by status (NS, 1H, 2H, FT, etc.)
+    if (req.query.status) {
+      query['fixture.status.short'] = req.query.status;
+    }
+    
+    // Filter by date range
+    if (req.query.from || req.query.to) {
+      query['fixture.date'] = {};
+      if (req.query.from) query['fixture.date'].$gte = req.query.from;
+      if (req.query.to) query['fixture.date'].$lte = req.query.to;
+    }
+    
+    const fixtures = await db.collection('fixtures')
+      .find(query)
+      .sort({ 'fixture.date': 1 })
+      .limit(100)
+      .toArray();
+    
+    res.json({
+      get: 'fixtures',
+      parameters: req.query,
+      errors: [],
+      results: fixtures.length,
+      response: fixtures
+    });
+  } catch (error) {
+    console.error('Error fetching fixtures:', error);
+    res.status(500).json({ error: 'Failed to fetch fixtures', message: error.message });
+  }
+});
+
+// Get standings from database
+app.get('/api/football/standings', async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected', message: 'MongoDB is not available. Please check MONGODB_URI in .env' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    const query = {};
+    
+    // Filter by league (required for standings)
+    if (req.query.league) {
+      query['league.id'] = parseInt(req.query.league);
+    } else {
+      return res.status(400).json({ error: 'Missing parameter', message: 'league parameter is required' });
+    }
+    
+    // Filter by season
+    if (req.query.season) {
+      query['league.season'] = parseInt(req.query.season);
+    }
+    
+    const standingsDoc = await db.collection('standings').findOne(query);
+    
+    if (!standingsDoc) {
+      return res.json({
+        get: 'standings',
+        parameters: req.query,
+        errors: [],
+        results: 0,
+        response: []
+      });
+    }
+    
+    res.json({
+      get: 'standings',
+      parameters: req.query,
+      errors: [],
+      results: 1,
+      response: [{
+        league: standingsDoc.league,
+        standings: standingsDoc.standings
+      }]
+    });
+  } catch (error) {
+    console.error('Error fetching standings:', error);
+    res.status(500).json({ error: 'Failed to fetch standings', message: error.message });
+  }
+});
+
+// Get teams from database
+app.get('/api/football/teams', async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected', message: 'MongoDB is not available. Please check MONGODB_URI in .env' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    const query = {};
+    
+    // Filter by team ID
+    if (req.query.id) {
+      query.id = parseInt(req.query.id);
+    }
+    
+    // Filter by league (would need to add league association to teams)
+    if (req.query.league) {
+      // For now, just return all teams since our seed data is Premier League only
+    }
+    
+    const teams = await db.collection('teams')
+      .find(query)
+      .sort({ name: 1 })
+      .toArray();
+    
+    res.json({
+      get: 'teams',
+      parameters: req.query,
+      errors: [],
+      results: teams.length,
+      response: teams.map(t => ({ team: t }))
+    });
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    res.status(500).json({ error: 'Failed to fetch teams', message: error.message });
+  }
+});
+
+// Select a match (user claims a match)
+app.post('/api/matches/:fixtureId/select', async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer /i, '');
+    const decoded = verifyToken(token);
+    
+    if (!decoded) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Please log in to select a match' });
+    }
+    
+    const username = decoded.sub || decoded.username;
+    const fixtureId = parseInt(req.params.fixtureId);
+    
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected', message: 'MongoDB is not available' });
+    }
+    
+    const db = mongoClient.db('goalsgoalsgoals');
+    
+    // Check if fixture exists and is upcoming (NS status)
+    const fixture = await db.collection('fixtures').findOne({
+      'fixture.id': fixtureId,
+      'fixture.status.short': 'NS'
+    });
+    
+    if (!fixture) {
+      return res.status(404).json({ error: 'Fixture not found', message: 'Fixture not found or not available for selection' });
+    }
+    
+    // Check if match is already selected by someone else
+    const existing = await db.collection('match_selections').findOne({ fixtureId });
+    
+    if (existing && existing.username !== username) {
+      return res.status(409).json({ 
+        error: 'Match already selected', 
+        message: `This match has already been selected by ${existing.username}`,
+        selectedBy: existing.username
+      });
+    }
+    
+    // Check if user already has a selection for a different upcoming match
+    const userExistingSelection = await db.collection('match_selections').findOne({ 
+      username,
+      fixtureId: { $ne: fixtureId } // Different match
+    });
+    
+    let replacedMatch = null;
+    if (userExistingSelection) {
+      // Remove the old selection
+      await db.collection('match_selections').deleteOne({ 
+        username,
+        fixtureId: userExistingSelection.fixtureId
+      });
+      replacedMatch = {
+        homeTeam: userExistingSelection.homeTeam,
+        awayTeam: userExistingSelection.awayTeam
+      };
+    }
+    
+    // Save or update selection
+    await db.collection('match_selections').updateOne(
+      { fixtureId },
+      { 
+        $set: { 
+          username, 
+          fixtureId,
+          selectedAt: new Date(),
+          homeTeam: fixture.teams.home.name,
+          awayTeam: fixture.teams.away.name,
+          date: fixture.fixture.date
+        } 
+      },
+      { upsert: true }
+    );
+    
+    res.json({
+      success: true,
+      message: replacedMatch 
+        ? `Match selection updated. Previous selection (${replacedMatch.homeTeam} vs ${replacedMatch.awayTeam}) removed.`
+        : 'Match selected successfully',
+      replaced: !!replacedMatch,
+      selection: {
+        fixtureId,
+        username,
+        homeTeam: fixture.teams.home.name,
+        awayTeam: fixture.teams.away.name
+      }
+    });
+  } catch (error) {
+    console.error('Error selecting match:', error);
+    res.status(500).json({ error: 'Failed to select match', message: error.message });
+  }
+});
+
+// Get all match selections
+app.get('/api/matches/selections', async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    
+    const db = mongoClient.db('goalsgoalsgoals');
+    const selections = await db.collection('match_selections').find({}).toArray();
+    
+    res.json({
+      success: true,
+      selections
+    });
+  } catch (error) {
+    console.error('Error fetching selections:', error);
+    res.status(500).json({ error: 'Failed to fetch selections', message: error.message });
+  }
+});
+
+// Unselect a match (user removes their selection)
+app.delete('/api/matches/:fixtureId/select', async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer /i, '');
+    const decoded = verifyToken(token);
+    
+    if (!decoded) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const username = decoded.sub || decoded.username;
+    const fixtureId = parseInt(req.params.fixtureId);
+    
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+    
+    const db = mongoClient.db('goalsgoalsgoals');
+    
+    // Only allow users to remove their own selection
+    const result = await db.collection('match_selections').deleteOne({ 
+      fixtureId, 
+      username 
+    });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Selection not found or not yours to remove' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Match selection removed'
+    });
+  } catch (error) {
+    console.error('Error removing selection:', error);
+    res.status(500).json({ error: 'Failed to remove selection', message: error.message });
+  }
+});
+
 const port = process.env.PORT || 4000;
 
 (async function start() {
   try {
     await connectMongo();
+    // Initialize API rate limiter with optional MongoDB support
+    await apiRateLimiter.initialize(mongoClient);
   } catch (e) {
     console.error('Error during MongoDB connect attempt', e);
   }

@@ -14,3 +14,8 @@ body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;line-height:1.
 .header{margin-top:0.5rem}
 .flow-text{max-width:900px;margin:0 auto}
 
+/* Live match pulse animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>API Rate Limiter Test - Goals Goals Goals</title>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-wrapper blue darken-2">
+      <div class="container">
+        <a href="index.html" class="brand-logo">Goals Goals Goals</a>
+        <a href="#" data-target="mobile-nav" class="sidenav-trigger right"><i class="material-icons">menu</i></a>
+        <ul id="nav-desktop" class="right hide-on-med-and-down">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="leagues.html">Leagues</a></li>
+          <li><a href="matches.html">Matches</a></li>
+          <li id="nav-login-link"><a href="login.html">Login</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <ul class="sidenav" id="mobile-nav">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="leagues.html">Leagues</a></li>
+    <li><a href="matches.html">Matches</a></li>
+    <li id="nav-login-link-mobile"><a href="login.html">Login</a></li>
+  </ul>
+
+  <main class="container section">
+    <h1>API Rate Limiter Test</h1>
+    <p>Test the API rate limiting system. The system blocks API calls after 75 calls in a rolling 7-day window.</p>
+
+    <div class="row">
+      <div class="col s12 m6">
+        <div id="api-rate-limit-widget"></div>
+      </div>
+
+      <div class="col s12 m6">
+        <div class="card">
+          <div class="card-content">
+            <span class="card-title">Test Actions</span>
+            
+            <button class="btn blue waves-effect waves-light" id="make-api-call" style="width: 100%; margin-bottom: 10px;">
+              <i class="material-icons left">cloud_upload</i>
+              Make API Call
+            </button>
+
+            <button class="btn orange waves-effect waves-light" id="make-10-calls" style="width: 100%; margin-bottom: 10px;">
+              <i class="material-icons left">repeat</i>
+              Make 10 Calls
+            </button>
+
+            <button class="btn red waves-effect waves-light" id="reset-limiter" style="width: 100%; margin-bottom: 10px;">
+              <i class="material-icons left">refresh</i>
+              Reset Limiter (Admin)
+            </button>
+
+            <button class="btn grey waves-effect waves-light" id="view-analytics" style="width: 100%;">
+              <i class="material-icons left">analytics</i>
+              View Analytics (Admin)
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-content">
+            <span class="card-title">Response Log</span>
+            <div id="response-log" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px;">
+              <p class="grey-text">No API calls made yet...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col s12">
+        <div class="card">
+          <div class="card-content">
+            <span class="card-title">How It Works</span>
+            <ul class="collection">
+              <li class="collection-item">
+                <strong>Soft Limit:</strong> 75 API calls per week - After this, new calls are blocked
+              </li>
+              <li class="collection-item">
+                <strong>Hard Limit:</strong> 100 API calls per week - Absolute maximum (for reference)
+              </li>
+              <li class="collection-item">
+                <strong>Rolling Window:</strong> The limit is based on a 7-day rolling window, not a calendar week
+              </li>
+              <li class="collection-item">
+                <strong>Automatic Reset:</strong> As calls expire (after 7 days), your quota automatically replenishes
+              </li>
+              <li class="collection-item">
+                <strong>Storage:</strong> Call tracking persists in file storage or MongoDB
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/rate-limit-widget.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  
+  <script>
+    const API_BASE_URL = window.GGG_API_ORIGIN || 'http://localhost:4000';
+    const logContainer = document.getElementById('response-log');
+
+    function logMessage(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      const colors = {
+        success: 'green-text',
+        error: 'red-text',
+        info: 'blue-text',
+        warning: 'orange-text'
+      };
+      const color = colors[type] || 'black-text';
+      
+      const entry = document.createElement('div');
+      entry.className = `${color}`;
+      entry.style.marginBottom = '5px';
+      entry.innerHTML = `[${timestamp}] ${message}`;
+      
+      if (logContainer.firstChild && logContainer.firstChild.classList.contains('grey-text')) {
+        logContainer.innerHTML = '';
+      }
+      
+      logContainer.insertBefore(entry, logContainer.firstChild);
+      
+      // Keep only last 20 entries
+      while (logContainer.children.length > 20) {
+        logContainer.removeChild(logContainer.lastChild);
+      }
+    }
+
+    async function makeApiCall() {
+      try {
+        logMessage('Making API call...', 'info');
+        const response = await fetch(`${API_BASE_URL}/api/football/fixtures`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ league: 39, season: 2025 })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          logMessage(`✓ API call successful. Calls this week: ${data.rateLimitStatus.count}/${data.rateLimitStatus.softLimit}`, 'success');
+          
+          // Refresh the widget
+          if (window.RateLimitWidget) {
+            const widget = new window.RateLimitWidget('api-rate-limit-widget');
+          }
+        } else {
+          logMessage(`✗ ${data.error}: ${data.message}`, 'error');
+        }
+      } catch (error) {
+        logMessage(`✗ Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function make10Calls() {
+      logMessage('Making 10 API calls...', 'warning');
+      for (let i = 0; i < 10; i++) {
+        await makeApiCall();
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between calls
+      }
+      logMessage('Finished making 10 calls', 'info');
+    }
+
+    async function resetLimiter() {
+      try {
+        logMessage('Resetting rate limiter...', 'warning');
+        const response = await fetch(`${API_BASE_URL}/api/rate-limit/reset`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          logMessage('✓ Rate limiter reset successfully', 'success');
+          
+          // Refresh the widget
+          if (window.RateLimitWidget) {
+            const widget = new window.RateLimitWidget('api-rate-limit-widget');
+          }
+        } else {
+          logMessage(`✗ ${data.error}`, 'error');
+        }
+      } catch (error) {
+        logMessage(`✗ Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function viewAnalytics() {
+      try {
+        logMessage('Fetching analytics...', 'info');
+        const response = await fetch(`${API_BASE_URL}/api/rate-limit/analytics`);
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          logMessage('✓ Analytics:', 'success');
+          logMessage(`Total calls: ${data.totalCalls}`, 'info');
+          logMessage(`By endpoint: ${JSON.stringify(data.byEndpoint)}`, 'info');
+          logMessage(`By day: ${JSON.stringify(data.byDay)}`, 'info');
+          console.log('Full analytics:', data);
+        } else {
+          logMessage(`✗ ${data.error}`, 'error');
+        }
+      } catch (error) {
+        logMessage(`✗ Error: ${error.message}`, 'error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('make-api-call').addEventListener('click', makeApiCall);
+      document.getElementById('make-10-calls').addEventListener('click', make10Calls);
+      document.getElementById('reset-limiter').addEventListener('click', resetLimiter);
+      document.getElementById('view-analytics').addEventListener('click', viewAnalytics);
+
+      // Initialize Materialize components
+      M.AutoInit();
+    });
+  </script>
+</body>
+</html>

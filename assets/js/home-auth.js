@@ -101,6 +101,10 @@
         if (t) t.style.display = '';
         const lm = document.getElementById('league-mgmt-tile');
         if (lm) lm.style.display = '';
+        const ma = document.getElementById('mock-api-tile');
+        if (ma) ma.style.display = '';
+        const rl = document.getElementById('rate-limiter-tile');
+        if (rl) rl.style.display = '';
       }
     } catch (e) {}
   })();

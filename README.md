@@ -1,125 +1,241 @@
-# Prototype Website
+# Goals Goals Goals
 
-This is a minimal static prototype site using Materialize CSS and TypeScript. It is configured to build locally and to deploy to GitHub Pages via GitHub Actions.
+A football league management application with fixtures, standings, and user authentication. Built with TypeScript, Express, and MongoDB.
 
-Quick start
+## 🚀 Quick Start (Recommended)
 
-- Install dependencies (dev only):
+The easiest way to run the project locally is using the startup script:
 
-```powershell
+```bash
+# Start with file-based storage (default)
+./start.sh
+
+# Start with MongoDB
+./start.sh --mongodb
+
+# Custom ports
+./start.sh --frontend-port 3000 --backend-port 5000
+
+# View help
+./start.sh --help
+```
+
+**What the script does:**
+- ✅ Starts both frontend (port 8000) and backend (port 4000) servers
+- ✅ Auto-installs dependencies if missing
+- ✅ Clears ports automatically
+- ✅ Creates logs in `logs/` directory
+- ✅ Validates configuration before starting
+- ✅ Press Ctrl+C to stop both servers
+
+**To stop servers:**
+```bash
+./stop.sh
+```
+
+**View logs:**
+```bash
+tail -f logs/backend.log
+tail -f logs/frontend.log
+```
+
+## 📦 Initial Setup
+
+### 1. Configure Environment
+
+Create `server/.env` (already provided):
+```bash
+JWT_SECRET = 'dev_secret_change_me_in_production'
+# MONGODB_URI = "mongodb+srv://..."  # Uncomment to use MongoDB
+INIT_ADMIN_PASS = 'admin123'
+```
+
+### 2. Seed Football Data (Optional)
+
+Populate MongoDB with Premier League fixtures and standings:
+```bash
+cd server
+node seed_football_data.js
+```
+
+See [server/FOOTBALL_DATA.md](server/FOOTBALL_DATA.md) for details.
+
+### 3. Create Admin User
+
+```bash
+cd server
+node create_admin.js --password=admin123
+```
+
+## 🎯 Features
+
+- **Fixtures Management**: View upcoming and finished Premier League matches
+- **Standings Table**: Real-time league standings
+- **User Authentication**: JWT-based auth with admin/user roles
+- **API Rate Limiting**: 75/100 calls per week with tracking
+- **Mock API**: Test API-Football v3 integration without real API calls
+- **Dual Storage**: MongoDB or file-based storage (users.json, leagues.json)
+
+## 📁 Project Structure
+
+```
+├── assets/
+│   ├── css/          # Styles
+│   └── js/           # Compiled JavaScript from TypeScript
+├── server/
+│   ├── index.js      # Express API server
+│   ├── api-rate-limiter.js
+│   ├── seed_football_data.js
+│   └── .env          # Environment configuration
+├── src/              # TypeScript source files
+├── start.sh          # Quick start script
+├── stop.sh           # Stop servers script
+└── *.html            # Frontend pages
+```
+
+## 🛠️ Manual Setup (Alternative)
+
+If you prefer not to use the startup script:
+
+### Frontend
+
+```bash
+# Install dependencies (dev only)
 npm ci
-```
 
-- Build TypeScript once:
+# Build TypeScript
 
-```powershell
+### Frontend
+
+```bash
+# Install dependencies (dev only)
+npm ci
+
+# Build TypeScript
 npm run build
-```
 
-- Watch TypeScript during development:
-
-```powershell
+# Watch TypeScript during development
 npm run watch
-```
 
-- Serve the site locally (from this folder):
-
-```powershell
-npm run start
+# Serve the site locally
+npm start
 # then open http://localhost:8000
 ```
 
-Deployment
+### Backend
 
-- This repository contains a GitHub Actions workflow that builds the site and publishes it to the `gh-pages` branch automatically whenever you push to `main`.
-- The workflow uses the `publish_dir` setting to choose which folder to publish. If your site files are located in a `docs/` subfolder, update the `publish_dir` in `.github/workflows/deploy.yml` to `./docs`.
-
-Notes
-
-- The site uses Materialize via CDN for styling. JavaScript is authored in TypeScript in `src/` and compiled to `assets/js/`.
-
-If you don't have `npm` or Node installed on your machine, you can still serve the site using Python's `http.server` as shown below:
-
-```powershell
-# from this folder
-python -m http.server 8000
-# open http://localhost:8000
-```
-
-Local auth server (prototype)
-
-This repository includes a small Express-based auth server under `server/` for local development. The server supports two storage modes:
-
-- File-backed (default) — stores users in `server/users.json` with bcrypt-hashed passwords.
-- MongoDB (optional) — if you provide a `MONGODB_URI` environment variable the server will use MongoDB for the `users` collection.
-
-Setup for local development
-
-1) Create a local `.env` file inside the `server/` folder (do NOT commit it):
-
-```text
-# server/.env
-JWT_SECRET=change_this_to_a_strong_random_value
-MONGODB_URI=
-PORT=4000
-```
-
-Note: admin users are now created explicitly using the `create_admin.js` helper (see `server/create_admin.js`). Do not keep initial admin passwords in `.env` long-term.
-
-2) If you want to use Atlas MongoDB, follow provisioning steps below and paste your connection string into `MONGODB_URI`.
-
-3) Install server dependencies (already included in this repo):
-
-```powershell
-# from project root
-npm --prefix .\\server ci
-# (or inside server/)
+```bash
 cd server
 npm ci
+node index.js
+# Server runs on port 4000
 ```
 
-4) Start the server (it will load `server/.env` automatically when present):
+## 🌐 Deployment
 
-```powershell
-# from project root
-npm --prefix .\\server start
-# or
-cd server
-npm start
+## 🌐 Deployment
+
+### GitHub Pages (Frontend)
+
+- This repository contains a GitHub Actions workflow that builds the site and publishes it to the `gh-pages` branch automatically whenever you push to `main`.
+- The workflow uses the `publish_dir` setting to choose which folder to publish.
+
+### Backend (Render/Heroku)
+
+**Recommended: Render**
+1. Create an account at https://render.com
+2. Create a new Web Service from your GitHub repo
+3. Set Build Command: `cd server && npm ci`
+4. Set Start Command: `cd server && npm start`
+5. Add environment variables:
+   - `MONGODB_URI` → your Atlas connection string
+   - `JWT_SECRET` → strong random value
+   - `PORT` → 4000 (optional)
+
+## 📚 Additional Documentation
+
+- [FOOTBALL_DATA.md](server/FOOTBALL_DATA.md) - Database setup and API endpoints
+- [MOCK_API.md](MOCK_API.md) - Mock API-Football testing
+- [RATE_LIMITER.md](RATE_LIMITER.md) - API rate limiting system
+
+## 🔧 Storage Options
+
+### File-Based Storage (Default)
+- Uses `server/users.json`, `server/leagues.json`, `server/api-calls.json`
+- Good for development and small deployments
+- No external dependencies
+
+### MongoDB Storage
+- Uncomment `MONGODB_URI` in `server/.env`
+- Supports MongoDB Atlas (free tier available)
+- Better for production and scaling
+
+## 🔐 Security Notes
+
+## 🔐 Security Notes
+
+- Do not commit `server/.env` or credentials to git
+- Use environment variables or secret stores for production
+- Rotate `JWT_SECRET` and database passwords regularly
+- Default admin credentials: `admin` / `admin123` (change immediately!)
+
+## 🗄️ MongoDB Atlas Setup (Optional)
+
+1. Sign in to https://cloud.mongodb.com
+2. Create a new Cluster → Shared → Free (M0)
+3. Network Access: Add your IP or `0.0.0.0/0` for testing
+4. Database Access: Create a user with read/write permissions
+5. Clusters → Connect → Copy connection string
+6. Paste into `server/.env` as `MONGODB_URI`
+
+Example connection string:
+```
+mongodb+srv://username:password@cluster0.abcd.mongodb.net/goalsdb?retryWrites=true&w=majority
 ```
 
-MongoDB Atlas provisioning (free tier)
+## 🐛 Troubleshooting
 
-1) Sign in to https://cloud.mongodb.com and create a Project.
-2) Create a new Cluster -> Shared -> Free (M0). Choose region and click Create.
-3) In "Network Access" add your current IP (or `0.0.0.0/0` for testing only).
-4) In "Database Access" add a database user and password (save these credentials).
-5) Under Clusters -> Connect -> "Connect your application" choose Driver: Node.js and copy the SRV connection string.
-6) Replace placeholders and URL-encode the password if it contains special characters. Example:
-
-```text
-mongodb+srv://ggg_admin:MyP%40ssw0rd@cluster0.abcd3.mongodb.net/goalsdb?retryWrites=true&w=majority
+**Port already in use:**
+```bash
+./stop.sh  # Clean up existing processes
 ```
 
-Running the server with Atlas
+**MongoDB connection errors:**
+- Check IP whitelist in Atlas
+- Verify credentials are URL-encoded
+- Use file storage as fallback (comment out MONGODB_URI)
 
-Paste the Atlas URI into `server/.env` as the value for `MONGODB_URI` (do NOT commit this file). Then start the server as above. On startup you should see either:
+**Frontend can't reach backend:**
+- Ensure backend is running on port 4000
+- Check CORS settings in `server/index.js`
+- Verify `assets/js/config.js` has correct API_ORIGIN
 
-- `Connected to MongoDB` — the server successfully connected to Atlas and will use the `users` collection there.
-- or `Failed to connect to MongoDB` (followed by an error) — the server will fall back to the local `server/users.json` file.
+**Logs not showing:**
+```bash
+cat logs/backend.log
+cat logs/frontend.log
+```
 
-Troubleshooting
+## 📝 API Endpoints
 
-- If you see connection errors, confirm your IP is whitelisted in Atlas and your username/password are correct and URL-encoded.
-- Ensure outbound traffic to Atlas is allowed by your network/firewall.
-- If you want to test quickly without Atlas, leave `MONGODB_URI` blank — the server will create `server/users.json` and use that.
+- `POST /api/register` - Register new user
+- `POST /api/login` - Login and get JWT
+- `GET /api/me` - Get current user info
+- `GET /api/football/fixtures` - Get fixtures (query: league, season, status)
+- `GET /api/football/standings` - Get standings (query: league, season)
+- `GET /api/football/teams` - Get teams
+- `GET /api/rate-limit/status` - Get API usage stats
+- `GET /api/rate-limit/analytics` - Get detailed analytics (admin)
+- `POST /api/rate-limit/reset` - Reset rate limiter (admin)
 
-Security notes
+---
 
-- Do not commit `server/.env` or any credentials to git. Use environment variables or your host's secret store for production.
-- Rotate `JWT_SECRET` and database passwords in production.
+## 📜 Legacy Documentation
 
-If you'd like, I can add a short example `server/.env.example` and a one-line PowerShell snippet for URL-encoding passwords.
+<details>
+<summary>Click to expand detailed manual setup instructions</summary>
+
+### Manual Backend Deployment
 
 **Deploying the API and connecting the frontend**
 
@@ -189,7 +305,9 @@ Additional production considerations
 - Cookies: consider switching to httpOnly secure cookies for tokens (server + client change) to reduce XSS risk.
 - Env management: add `JWT_SECRET`, `MONGODB_URI` and other secrets as environment variables in your host's dashboard; rotate as needed.
 
-If you want I can implement the client change (add `assets/js/config.js` and update `src/auth.ts` to use `API_ORIGIN`) and then build the site so your GitHub Pages site calls the deployed API directly. Let me know and I will patch the client and run a build.
-```
+</details>
 
+---
+
+**Made with ⚽ for football fans**
  If you'd like, I can push these files to your remote repository (I need the remote URL or git access), or guide you through the `git` commands to push from your machine.
