@@ -69,7 +69,9 @@ node create_admin.js --password=admin123
 
 ## 🎯 Features
 
-- **Fixtures Management**: View upcoming and finished Premier League matches
+- **Fixtures Management**: View upcoming and finished matches from 6 major leagues
+- **Match Selection**: Users can select one upcoming match to follow
+- **Match History**: Automatic archival of finished match selections with scores and rounds
 - **Standings Table**: Real-time league standings
 - **User Authentication**: JWT-based auth with admin/user roles
 - **API Rate Limiting**: 75/100 calls per week with tracking
@@ -218,15 +220,52 @@ cat logs/frontend.log
 
 ## 📝 API Endpoints
 
+### Authentication
 - `POST /api/register` - Register new user
 - `POST /api/login` - Login and get JWT
 - `GET /api/me` - Get current user info
+
+### Football Data
 - `GET /api/football/fixtures` - Get fixtures (query: league, season, status)
 - `GET /api/football/standings` - Get standings (query: league, season)
 - `GET /api/football/teams` - Get teams
+
+### Match Selections
+- `POST /api/matches/:fixtureId/select` - Select a match (authenticated)
+- `DELETE /api/matches/:fixtureId/select` - Unselect a match (authenticated)
+- `GET /api/matches/selections` - Get all current selections
+- `GET /api/matches/history` - Get archived match selections (query: username)
+- `POST /api/matches/archive-finished` - Manually trigger archival of finished matches (admin)
+
+### Rate Limiting
 - `GET /api/rate-limit/status` - Get API usage stats
 - `GET /api/rate-limit/analytics` - Get detailed analytics (admin)
 - `POST /api/rate-limit/reset` - Reset rate limiter (admin)
+
+### Match Selection Archival
+
+The system automatically archives match selections when fixtures move from "upcoming" (NS) to "finished" (FT):
+
+- **Automatic**: Runs every 15 minutes after server startup
+- **Manual**: Admin can trigger via dashboard button or `POST /api/matches/archive-finished`
+- **Data Stored**: Username, teams, final score, round/gameweek, league info, dates
+- **Collection**: `match_selection_history` in MongoDB
+
+Archived records include:
+```javascript
+{
+  username: "user123",
+  fixtureId: 12345,
+  homeTeam: "Arsenal",
+  awayTeam: "Chelsea",
+  finalScore: { home: 2, away: 1 },
+  round: "Regular Season - 23",
+  leagueName: "Premier League",
+  season: 2024,
+  selectedAt: "2026-01-15T10:00:00Z",
+  archivedAt: "2026-01-16T18:00:00Z"
+}
+```
 
 ---
 

@@ -1,18 +1,41 @@
 /* Minimal theme overrides; rely on Materialize for layout */
 *{box-sizing:border-box}
-:root{--bg:#ffffff;--fg:#0b0b0b}
+:root{
+  --bg:#f1f8e9;
+  --fg:#2d5016;
+  --primary:#81c784;
+  --primary-dark:#66bb6a;
+  --primary-light:#a5d6a7;
+  --accent:#c5e1a5;
+  --card-bg:#ffffff;
+}
 body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;color:var(--fg);background:var(--bg)}
-.dark{background:#0b1014;color:#e6eef6}
+.dark{background:#1b5e20;color:#e8f5e9}
 .container{max-width:1000px;margin:0 auto;padding:1rem}
 
+/* Navigation - pastel green theme */
+nav .nav-wrapper{background-color:#4a7c59 !important}
+nav a{color:#ffffff !important}
+nav a:hover{background-color:rgba(255,255,255,0.15)}
+
+/* Logo styling */
+.brand-logo{font-weight:700;display:flex !important;align-items:center;gap:8px}
+.brand-logo img{height:40px;width:40px;vertical-align:middle}
+
 /* Small helpers */
-.hero{padding:3.5rem 1rem}
-.features .card{height:100%}
-.brand-logo{font-weight:700}
-.site-footer{padding:1rem 0;margin-top:2rem}
+.hero{padding:3.5rem 1rem;background:linear-gradient(135deg, var(--primary-light) 0%, var(--accent) 100%)}
+.features .card{height:100%;background:var(--card-bg)}
+.site-footer{padding:1rem 0;margin-top:2rem;background-color:var(--primary-light)}
 /* small spacing tweaks for hero */
 .header{margin-top:0.5rem}
 .flow-text{max-width:900px;margin:0 auto}
+
+/* Cards and buttons - football theme */
+.card{box-shadow:0 2px 8px rgba(45,80,22,0.15) !important;border-radius:8px;overflow:hidden}
+.card:hover{box-shadow:0 4px 16px rgba(45,80,22,0.25) !important}
+.btn,.btn-small,.btn-large{background-color:var(--primary) !important;color:#2d5016 !important}
+.btn:hover,.btn-small:hover,.btn-large:hover{background-color:var(--primary-dark) !important}
+.btn.blue{background-color:var(--primary) !important}
 
 /* Live match pulse animation */
 @keyframes pulse {
