@@ -12,7 +12,9 @@
   <nav>
     <div class="nav-wrapper blue darken-2">
       <div class="container">
-        <a href="index.html" class="brand-logo">Goals Goals Goals</a>
+        <a href="index.html" class="brand-logo">
+          Goals Goals Goals
+        </a>
         <a href="#" data-target="mobile-nav" class="sidenav-trigger right"><i class="material-icons">menu</i></a>
         <ul id="nav-desktop" class="right hide-on-med-and-down">
           <li><a href="index.html">Home</a></li>
@@ -36,6 +38,23 @@
       <div class="col s12">
         <h4>Admin Dashboard</h4>
         <p id="adminWelcome"></p>
+        
+        <!-- Match Selection History Card -->
+        <div class="card">
+          <div class="card-content">
+            <span class="card-title">Match Selection History</span>
+            <p>View archived match selections from finished games</p>
+          </div>
+          <div class="card-action">
+            <a href="#" id="viewHistoryBtn" class="btn waves-effect waves-light">
+              <i class="material-icons left">history</i>View History
+            </a>
+            <a href="#" id="archiveNowBtn" class="btn waves-effect waves-light orange">
+              <i class="material-icons left">archive</i>Archive Finished Matches Now
+            </a>
+          </div>
+        </div>
+
         <h5>Static Users</h5>
         <ul id="userList" class="collection"></ul>
 
@@ -60,11 +79,142 @@
         </form>
       </div>
     </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="modal modal-fixed-footer" style="max-height: 90%;">
+      <div class="modal-content">
+        <h4>Match Selection History</h4>
+        <div class="row">
+          <div class="col s12 m6">
+            <div class="input-field">
+              <input id="filterUsername" type="text" placeholder="Filter by username">
+              <label for="filterUsername">Username Filter</label>
+            </div>
+          </div>
+          <div class="col s12 m6">
+            <p style="margin-top: 20px;">
+              Total archived selections: <strong id="historyCount">0</strong>
+            </p>
+          </div>
+        </div>
+        <div id="historyContent">
+          <div class="progress">
+            <div class="indeterminate"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+      </div>
+    </div>
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="assets/js/config.js"></script>
   <script src="assets/js/site-header.js"></script>
   <script type="module" src="assets/js/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize modals
+      const modals = document.querySelectorAll('.modal');
+      M.Modal.init(modals);
+
+      // View History button
+      document.getElementById('viewHistoryBtn').addEventListener('click', async function(e) {
+        e.preventDefault();
+        const modal = M.Modal.getInstance(document.getElementById('historyModal'));
+        modal.open();
+        await loadHistory();
+      });
+
+      // Archive Now button
+      document.getElementById('archiveNowBtn').addEventListener('click', async function(e) {
+        e.preventDefault();
+        if (confirm('Archive all finished match selections now?')) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/matches/archive-finished`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+              M.toast({html: data.message, classes: 'green'});
+            } else {
+              M.toast({html: 'Failed to archive', classes: 'red'});
+            }
+          } catch (error) {
+            console.error('Archive error:', error);
+            M.toast({html: 'Error archiving matches', classes: 'red'});
+          }
+        }
+      });
+
+      // Filter username
+      let allHistory = [];
+      document.getElementById('filterUsername').addEventListener('input', function(e) {
+        const filterText = e.target.value.toLowerCase();
+        if (filterText === '') {
+          displayHistory(allHistory);
+        } else {
+          const filtered = allHistory.filter(h => h.username.toLowerCase().includes(filterText));
+          displayHistory(filtered);
+        }
+      });
+
+      async function loadHistory() {
+        const content = document.getElementById('historyContent');
+        content.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/matches/history`);
+          const data = await response.json();
+          
+          if (data.success) {
+            allHistory = data.history;
+            document.getElementById('historyCount').textContent = data.count;
+            displayHistory(allHistory);
+          } else {
+            content.innerHTML = '<p class="red-text">Failed to load history</p>';
+          }
+        } catch (error) {
+          console.error('Load history error:', error);
+          content.innerHTML = '<p class="red-text">Error loading history</p>';
+        }
+      }
+
+      function displayHistory(history) {
+        const content = document.getElementById('historyContent');
+        
+        if (history.length === 0) {
+          content.innerHTML = '<p class="grey-text">No archived match selections found</p>';
+          return;
+        }
+
+        let html = '<table class="striped highlight responsive-table"><thead><tr>' +
+          '<th>User</th><th>Match</th><th>Score</th><th>Round</th><th>League</th><th>Selected</th><th>Archived</th>' +
+          '</tr></thead><tbody>';
+        
+        history.forEach(h => {
+          const selectedDate = new Date(h.selectedAt).toLocaleDateString();
+          const archivedDate = new Date(h.archivedAt).toLocaleString();
+          html += `<tr>
+            <td><strong>${h.username}</strong></td>
+            <td>${h.homeTeam} vs ${h.awayTeam}</td>
+            <td><span class="badge">${h.finalScore.home} - ${h.finalScore.away}</span></td>
+            <td>${h.round || 'N/A'}</td>
+            <td>${h.leagueName || 'N/A'}</td>
+            <td>${selectedDate}</td>
+            <td>${archivedDate}</td>
+          </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        content.innerHTML = html;
+      }
+    });
+  </script>
 </body>
 </html>

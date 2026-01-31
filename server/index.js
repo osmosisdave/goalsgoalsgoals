@@ -699,7 +699,7 @@ app.post('/api/matches/:fixtureId/select', async (req, res) => {
       };
     }
     
-    // Save or update selection
+    // Save or update selection with additional metadata for future archival
     await db.collection('match_selections').updateOne(
       { fixtureId },
       { 
@@ -709,7 +709,12 @@ app.post('/api/matches/:fixtureId/select', async (req, res) => {
           selectedAt: new Date(),
           homeTeam: fixture.teams.home.name,
           awayTeam: fixture.teams.away.name,
-          date: fixture.fixture.date
+          date: fixture.fixture.date,
+          leagueId: fixture.league.id,
+          leagueName: fixture.league.name,
+          round: fixture.league.round,
+          season: fixture.league.season,
+          status: fixture.fixture.status.short
         } 
       },
       { upsert: true }
@@ -793,6 +798,172 @@ app.delete('/api/matches/:fixtureId/select', async (req, res) => {
     res.status(500).json({ error: 'Failed to remove selection', message: error.message });
   }
 });
+
+// Archive finished match selections
+app.post('/api/matches/archive-finished', async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    
+    // Get all current selections
+    const selections = await db.collection('match_selections').find({}).toArray();
+    
+    if (selections.length === 0) {
+      return res.json({ success: true, archived: 0, message: 'No selections to check' });
+    }
+
+    // Get all fixture IDs from selections
+    const fixtureIds = selections.map(s => s.fixtureId);
+    
+    // Get fixtures from database
+    const fixtures = await db.collection('fixtures').find({
+      'fixture.id': { $in: fixtureIds }
+    }).toArray();
+
+    // Create a map of fixture statuses
+    const fixtureMap = new Map(fixtures.map(f => [f.fixture.id, f]));
+
+    let archived = 0;
+    const bulkArchive = [];
+    const selectionsToRemove = [];
+
+    // Check each selection
+    for (const selection of selections) {
+      const fixture = fixtureMap.get(selection.fixtureId);
+      
+      if (fixture && fixture.fixture.status.short === 'FT') {
+        // Match is finished - archive it
+        const archiveRecord = {
+          ...selection,
+          archivedAt: new Date(),
+          finalScore: {
+            home: fixture.goals.home,
+            away: fixture.goals.away
+          },
+          matchStatus: fixture.fixture.status.long,
+          // Ensure we have round/league info (might be missing in old records)
+          round: selection.round || fixture.league.round,
+          leagueName: selection.leagueName || fixture.league.name,
+          season: selection.season || fixture.league.season
+        };
+        
+        bulkArchive.push(archiveRecord);
+        selectionsToRemove.push(selection.fixtureId);
+        archived++;
+      }
+    }
+
+    // Perform bulk operations
+    if (bulkArchive.length > 0) {
+      await db.collection('match_selection_history').insertMany(bulkArchive);
+      await db.collection('match_selections').deleteMany({
+        fixtureId: { $in: selectionsToRemove }
+      });
+    }
+
+    res.json({
+      success: true,
+      archived,
+      message: `Archived ${archived} finished match selection${archived !== 1 ? 's' : ''}`
+    });
+  } catch (error) {
+    console.error('Error archiving finished matches:', error);
+    res.status(500).json({ error: 'Failed to archive finished matches', message: error.message });
+  }
+});
+
+// Get match selection history
+app.get('/api/matches/history', async (req, res) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    const username = req.query.username;
+    
+    const query = username ? { username } : {};
+    const history = await db.collection('match_selection_history')
+      .find(query)
+      .sort({ archivedAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      count: history.length,
+      history
+    });
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to fetch history', message: error.message });
+  }
+});
+
+// Function to automatically archive finished matches
+async function archiveFinishedMatches() {
+  if (!mongoClient) return;
+  
+  try {
+    const db = mongoClient.db('goalsgoalsgoals');
+    
+    // Get all current selections
+    const selections = await db.collection('match_selections').find({}).toArray();
+    
+    if (selections.length === 0) return;
+
+    // Get all fixture IDs from selections
+    const fixtureIds = selections.map(s => s.fixtureId);
+    
+    // Get fixtures from database
+    const fixtures = await db.collection('fixtures').find({
+      'fixture.id': { $in: fixtureIds }
+    }).toArray();
+
+    // Create a map of fixture statuses
+    const fixtureMap = new Map(fixtures.map(f => [f.fixture.id, f]));
+
+    const bulkArchive = [];
+    const selectionsToRemove = [];
+
+    // Check each selection
+    for (const selection of selections) {
+      const fixture = fixtureMap.get(selection.fixtureId);
+      
+      if (fixture && fixture.fixture.status.short === 'FT') {
+        // Match is finished - archive it
+        const archiveRecord = {
+          ...selection,
+          archivedAt: new Date(),
+          finalScore: {
+            home: fixture.goals.home,
+            away: fixture.goals.away
+          },
+          matchStatus: fixture.fixture.status.long,
+          round: selection.round || fixture.league.round,
+          leagueName: selection.leagueName || fixture.league.name,
+          season: selection.season || fixture.league.season
+        };
+        
+        bulkArchive.push(archiveRecord);
+        selectionsToRemove.push(selection.fixtureId);
+      }
+    }
+
+    // Perform bulk operations
+    if (bulkArchive.length > 0) {
+      await db.collection('match_selection_history').insertMany(bulkArchive);
+      await db.collection('match_selections').deleteMany({
+        fixtureId: { $in: selectionsToRemove }
+      });
+      console.log(`✓ Auto-archived ${bulkArchive.length} finished match selection(s)`);
+    }
+  } catch (error) {
+    console.error('Error in auto-archive:', error);
+  }
+}
 
 const port = process.env.PORT || 4000;
 
