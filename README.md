@@ -85,7 +85,12 @@ node create_admin.js --password=admin123
 │   ├── css/          # Styles
 │   └── js/           # Compiled JavaScript from TypeScript
 ├── server/
-│   ├── index.js      # Express API server
+│   ├── src/          # TypeScript source files
+│   │   ├── server.ts # Express API server
+│   │   ├── fixture-fetcher.ts
+│   │   ├── api-rate-limiter.ts
+│   │   └── types/
+│   ├── dist/         # Compiled JavaScript (generated)
 │   ├── api-rate-limiter.js
 │   ├── seed_football_data.js
 │   └── .env          # Environment configuration
@@ -129,7 +134,8 @@ npm start
 ```bash
 cd server
 npm ci
-node index.js
+npm run build  # Compile TypeScript
+node dist/server.js
 # Server runs on port 4000
 ```
 
@@ -209,7 +215,7 @@ mongodb+srv://username:password@cluster0.abcd.mongodb.net/goalsdb?retryWrites=tr
 
 **Frontend can't reach backend:**
 - Ensure backend is running on port 4000
-- Check CORS settings in `server/index.js`
+- Check CORS settings in `server/src/server.ts`
 - Verify `assets/js/config.js` has correct API_ORIGIN
 
 **Logs not showing:**
