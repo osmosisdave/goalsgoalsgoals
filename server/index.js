@@ -5,7 +5,8 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs-extra');
 const path = require('path');
 const cors = require('cors');
-const apiRateLimiter = require('./api-rate-limiter');
+// Import compiled TypeScript rate limiter
+const apiRateLimiter = require('./dist/api-rate-limiter').default;
 
 // Load .env into process.env when present (for local development)
 try {
@@ -422,6 +423,65 @@ app.post('/api/rate-limit/reset', async (req, res) => {
   } catch (error) {
     console.error('Error resetting rate limiter:', error);
     res.status(500).json({ error: 'Failed to reset rate limiter' });
+  }
+});
+
+// Sync fixtures from API-Football (admin only)
+app.post('/api/admin/sync-fixtures', async (req, res) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  if (!mongoClient) {
+    return res.status(500).json({ error: 'MongoDB not connected' });
+  }
+
+  const API_KEY = process.env.API_FOOTBALL_KEY;
+  const API_HOST = process.env.API_FOOTBALL_HOST || 'v3.football.api-sports.io';
+
+  if (!API_KEY) {
+    return res.status(500).json({ 
+      error: 'API_FOOTBALL_KEY not configured',
+      details: 'Please add API_FOOTBALL_KEY to your .env file'
+    });
+  }
+
+  try {
+    const { season = 2025, dateRange = 20 } = req.body;
+    
+    console.log(`Starting fixture sync for season ${season}, dateRange ${dateRange} days`);
+
+    // Dynamically import the TypeScript fixture fetcher (compiled to JS)
+    const { FixtureFetcher } = require('./dist/fixture-fetcher');
+    
+    const fetcher = new FixtureFetcher(
+      mongoClient,
+      apiRateLimiter,
+      API_KEY,
+      API_HOST
+    );
+
+    const result = await fetcher.syncFixtures(season, dateRange);
+
+    console.log('Sync completed:', result.summary);
+    res.json(result);
+  } catch (error) {
+    console.error('Error syncing fixtures:', error);
+    
+    // Handle specific error types
+    if (error.message && error.message.includes('Rate limit')) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        details: error.message 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to sync fixtures',
+      details: error.message || 'Unknown error'
+    });
   }
 });
 
