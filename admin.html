@@ -39,6 +39,36 @@
         <h4>Admin Dashboard</h4>
         <p id="adminWelcome"></p>
         
+        <!-- Sync Fixtures from API Card -->
+        <div class="card">
+          <div class="card-content">
+            <span class="card-title">Sync Fixtures from API-Football</span>
+            <p>Fetch latest fixtures from API-Football and save to database</p>
+            <div id="syncStatus" style="margin-top: 15px;"></div>
+          </div>
+          <div class="card-action">
+            <a href="#" id="syncFixturesBtn" class="btn waves-effect waves-light blue">
+              <i class="material-icons left">sync</i>Sync Fixtures
+            </a>
+            <span id="syncProgress" style="margin-left: 15px; display: none;">
+              <div class="preloader-wrapper small active">
+                <div class="spinner-layer spinner-blue-only">
+                  <div class="circle-clipper left">
+                    <div class="circle"></div>
+                  </div>
+                  <div class="gap-patch">
+                    <div class="circle"></div>
+                  </div>
+                  <div class="circle-clipper right">
+                    <div class="circle"></div>
+                  </div>
+                </div>
+              </div>
+              <span id="syncProgressText" style="margin-left: 10px;">Syncing...</span>
+            </span>
+          </div>
+        </div>
+
         <!-- Match Selection History Card -->
         <div class="card">
           <div class="card-content">
@@ -118,6 +148,77 @@
       // Initialize modals
       const modals = document.querySelectorAll('.modal');
       M.Modal.init(modals);
+
+      // Sync Fixtures button
+      document.getElementById('syncFixturesBtn').addEventListener('click', async function(e) {
+        e.preventDefault();
+        
+        const token = localStorage.getItem('token');
+        if (!token) {
+          M.toast({html: 'Not authenticated', classes: 'red'});
+          return;
+        }
+
+        // Disable button and show progress
+        const syncBtn = document.getElementById('syncFixturesBtn');
+        const syncProgress = document.getElementById('syncProgress');
+        const syncStatus = document.getElementById('syncStatus');
+        
+        syncBtn.classList.add('disabled');
+        syncProgress.style.display = 'inline-block';
+        syncStatus.innerHTML = '<p class="blue-text">Starting sync...</p>';
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/admin/sync-fixtures`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              season: 2025,
+              dateRange: 20
+            })
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            syncStatus.innerHTML = `
+              <div class="card-panel green lighten-4 green-text text-darken-4">
+                <h6><i class="material-icons left">check_circle</i>Sync Complete!</h6>
+                <ul>
+                  <li><strong>Total Fixtures:</strong> ${data.summary.totalFixtures}</li>
+                  <li><strong>New:</strong> ${data.summary.newFixtures}</li>
+                  <li><strong>Updated:</strong> ${data.summary.updatedFixtures}</li>
+                  <li><strong>Leagues Synced:</strong> ${data.summary.leaguesSynced}</li>
+                  <li><strong>API Calls Used:</strong> ${data.summary.apiCallsUsed}</li>
+                  <li><strong>Duration:</strong> ${(data.summary.duration / 1000).toFixed(2)}s</li>
+                </ul>
+                ${data.details && data.details.length > 0 ? `
+                  <p style="margin-top: 10px;"><strong>Details:</strong></p>
+                  <ul>${data.details.map(d => `<li>${d}</li>`).join('')}</ul>
+                ` : ''}
+              </div>
+            `;
+            M.toast({html: `✓ Synced ${data.summary.totalFixtures} fixtures!`, classes: 'green'});
+          } else {
+            throw new Error(data.error || 'Sync failed');
+          }
+        } catch (error) {
+          console.error('Sync error:', error);
+          syncStatus.innerHTML = `
+            <div class="card-panel red lighten-4 red-text text-darken-4">
+              <i class="material-icons left">error</i>
+              <strong>Sync Failed:</strong> ${error.message}
+            </div>
+          `;
+          M.toast({html: `✗ Sync failed: ${error.message}`, classes: 'red'});
+        } finally {
+          syncBtn.classList.remove('disabled');
+          syncProgress.style.display = 'none';
+        }
+      });
 
       // View History button
       document.getElementById('viewHistoryBtn').addEventListener('click', async function(e) {
