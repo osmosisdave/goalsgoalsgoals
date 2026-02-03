@@ -269,12 +269,17 @@ const allowedOrigins = process.env.ALLOWED_ORIGIN
 
 app.use(cors({
   origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+    
+    // Log rejected origins for debugging
+    console.warn(`CORS: Rejected origin "${origin}". Allowed origins:`, allowedOrigins);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 }));
@@ -381,11 +386,28 @@ app.delete('/api/leagues/:name', async (req: Request, res: Response) => {
 // Login
 app.post('/api/login', async (req: Request, res: Response) => {
   const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: 'Missing credentials' });
+  console.log(`[LOGIN] Attempt for username: "${username}"`);
+  
+  if (!username || !password) {
+    console.log('[LOGIN] Missing credentials in request body');
+    return res.status(400).json({ error: 'Missing credentials' });
+  }
+  
   const user = await getUserForAuth(username);
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+  if (!user) {
+    console.log(`[LOGIN] User "${username}" not found in database`);
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  console.log(`[LOGIN] User "${username}" found, verifying password...`);
   const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+  
+  if (!ok) {
+    console.log(`[LOGIN] Password verification failed for "${username}"`);
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  console.log(`[LOGIN] Success for "${username}"`);
   const token = createToken(user);
   res.json({ token });
 });
