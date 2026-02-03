@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+.DS_Store
+users.json
+leagues.json
+api-calls.json
+admin.token
+*.pid

@@ -143,9 +143,17 @@ echo ""
 # Create logs directory
 mkdir -p logs
 
+# Build TypeScript if needed
+if [ ! -d "server/dist" ] || [ "server/src/server.ts" -nt "server/dist/server.js" ]; then
+  echo -e "${YELLOW}Building TypeScript...${NC}"
+  (cd server && npm run build)
+  echo -e "${GREEN}✓ TypeScript built${NC}"
+  echo ""
+fi
+
 # Start backend server
 echo -e "${YELLOW}Starting backend server on port $BACKEND_PORT...${NC}"
-PORT=$BACKEND_PORT node server/index.js > logs/backend.log 2>&1 &
+PORT=$BACKEND_PORT node server/dist/server.js > logs/backend.log 2>&1 &
 BACKEND_PID=$!
 sleep 2
 
