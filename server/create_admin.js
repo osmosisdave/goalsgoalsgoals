@@ -32,14 +32,14 @@ const USERS_FILE = path.join(__dirname, 'users.json');
       const { MongoClient } = require('mongodb');
       const client = new MongoClient(MONGODB_URI);
       await client.connect();
-      const db = client.db();
+      const db = client.db('goalsgoalsgoals');
       const col = db.collection('users');
       const existing = await col.findOne({ username });
       if (existing) {
-        console.log('Admin user already exists in MongoDB. No changes made.');
+        console.log('Admin user already exists in MongoDB (database: goalsgoalsgoals). No changes made.');
       } else {
         await col.insertOne({ username, passwordHash, role });
-        console.log('Created admin user in MongoDB (username: admin)');
+        console.log('Created admin user in MongoDB (username: admin, database: goalsgoalsgoals)');
       }
       await client.close();
       return;
