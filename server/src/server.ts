@@ -68,9 +68,9 @@ async function connectMongo(): Promise<void> {
       tls: true,
     });
     await mongoClient.connect();
-    const db = mongoClient.db();
+    const db = mongoClient.db('goalsgoalsgoals');
     usersCollection = db.collection<User>('users');
-    console.log('Connected to MongoDB');
+    console.log('Connected to MongoDB - using database: goalsgoalsgoals');
   } catch (e: any) {
     console.error('Failed to connect to MongoDB — connection error details follow:');
     console.error(e && e.stack ? e.stack : e);
@@ -84,7 +84,7 @@ async function connectMongo(): Promise<void> {
           tlsAllowInvalidHostnames: true,
         });
         await fallbackClient.connect();
-        const db2 = fallbackClient.db();
+        const db2 = fallbackClient.db('goalsgoalsgoals');
         usersCollection = db2.collection<User>('users');
         mongoClient = fallbackClient;
         console.warn('Secondary connect succeeded with tlsAllowInvalidCertificates=true — certificate validation appears to be the blocker.');
@@ -182,7 +182,7 @@ async function createUserInStore(user: { username: string; passwordHash: string;
 async function readLeagues(): Promise<string[]> {
   if (mongoClient) {
     try {
-      const db = mongoClient.db();
+      const db = mongoClient.db('goalsgoalsgoals');
       const coll = db.collection('leagues');
       const docs = await coll.find({}, { projection: { _id: 0, name: 1 } }).toArray();
       return docs.map(d => d.name);
@@ -198,7 +198,7 @@ async function readLeagues(): Promise<string[]> {
 async function createLeagueInStore(name: string): Promise<boolean> {
   if (!name) throw new Error('Missing league name');
   if (mongoClient) {
-    const db = mongoClient.db();
+    const db = mongoClient.db('goalsgoalsgoals');
     const coll = db.collection('leagues');
     const existing = await coll.findOne({ name });
     if (existing) return false;
@@ -217,7 +217,7 @@ async function createLeagueInStore(name: string): Promise<boolean> {
 async function deleteLeagueInStore(name: string): Promise<boolean> {
   if (!name) throw new Error('Missing league name');
   if (mongoClient) {
-    const db = mongoClient.db();
+    const db = mongoClient.db('goalsgoalsgoals');
     const coll = db.collection('leagues');
     await coll.deleteOne({ name });
     
