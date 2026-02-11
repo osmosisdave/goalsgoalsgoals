@@ -8,6 +8,7 @@ import cors from 'cors';
 import { MongoClient, Collection, Db } from 'mongodb';
 import * as dotenv from 'dotenv';
 import apiRateLimiter from './api-rate-limiter';
+import { DEFAULT_LEAGUE_IDS } from './fixture-fetcher';
 
 // Load .env into process.env when present (for local development)
 try {
@@ -34,6 +35,7 @@ interface JWTPayload {
 interface SyncFixturesRequest {
   season?: number;
   dateRange?: number;
+  leagueIds?: number[];
 }
 
 interface MatchSelection {
@@ -504,6 +506,74 @@ app.post('/api/rate-limit/reset', async (req: Request, res: Response) => {
   }
 });
 
+// Sync leagues from API-Football (admin only)
+app.post('/api/admin/sync-leagues', async (req: Request, res: Response) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
+  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+
+  if (!mongoClient) {
+    return res.status(500).json({ error: 'MongoDB not connected' });
+  }
+
+  const API_KEY = process.env.API_FOOTBALL_KEY;
+  const API_HOST = process.env.API_FOOTBALL_HOST || 'v3.football.api-sports.io';
+
+  if (!API_KEY) {
+    return res.status(500).json({
+      error: 'API_FOOTBALL_KEY not configured',
+      details: 'Please add API_FOOTBALL_KEY to your .env file'
+    });
+  }
+
+  try {
+    console.log('Starting leagues sync...');
+
+    const { FixtureFetcher } = require('../dist/fixture-fetcher');
+
+    const fetcher = new FixtureFetcher(
+      mongoClient,
+      apiRateLimiter,
+      API_KEY,
+      API_HOST
+    );
+
+    const startTime = Date.now();
+    const leagues = await fetcher.fetchAvailableLeagues();
+    const { newCount, updatedCount } = await fetcher.saveLeagues(leagues);
+    const duration = Date.now() - startTime;
+
+    const result = {
+      success: true,
+      summary: {
+        total: leagues.length,
+        new: newCount,
+        updated: updatedCount,
+        duration
+      }
+    };
+
+    console.log('Leagues sync completed:', result.summary);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error syncing leagues:', error);
+
+    if (error.message && error.message.includes('Rate limit')) {
+      return res.status(429).json({
+        error: 'Rate limit exceeded',
+        details: error.message
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to sync leagues',
+      details: error.message || 'Unknown error'
+    });
+  }
+});
+
 // Sync fixtures from API-Football (admin only)
 app.post('/api/admin/sync-fixtures', async (req: Request<{}, {}, SyncFixturesRequest>, res: Response) => {
   const auth = req.headers.authorization || '';
@@ -527,9 +597,16 @@ app.post('/api/admin/sync-fixtures', async (req: Request<{}, {}, SyncFixturesReq
   }
 
   try {
-    const { season = 2025, dateRange = 20 } = req.body;
+    const { season = 2025, dateRange, leagueIds } = req.body;
 
-    console.log(`Starting fixture sync for season ${season}, dateRange ${dateRange} days`);
+    // Use provided league IDs or default to popular leagues
+    const targetLeagueIds = (leagueIds && Array.isArray(leagueIds) && leagueIds.length > 0) 
+      ? leagueIds 
+      : DEFAULT_LEAGUE_IDS;
+
+    const dateRangeMsg = dateRange !== undefined ? `${dateRange} days` : 'no date range (full season)';
+    console.log(`Starting fixture sync for season ${season}, dateRange ${dateRangeMsg}`);
+    console.log(`Syncing fixtures for ${targetLeagueIds.length} leagues: ${targetLeagueIds.join(', ')}`);
 
     const { FixtureFetcher } = require('../dist/fixture-fetcher');
 
@@ -540,7 +617,7 @@ app.post('/api/admin/sync-fixtures', async (req: Request<{}, {}, SyncFixturesReq
       API_HOST
     );
 
-    const result = await fetcher.syncFixtures(season, dateRange);
+    const result = await fetcher.syncFixturesForLeagues(targetLeagueIds, season, dateRange);
 
     console.log('Sync completed:', result.summary);
     res.json(result);

@@ -153,7 +153,7 @@ fi
 
 # Start backend server
 echo -e "${YELLOW}Starting backend server on port $BACKEND_PORT...${NC}"
-PORT=$BACKEND_PORT node server/dist/server.js > logs/backend.log 2>&1 &
+PORT=$BACKEND_PORT cd server && node dist/server.js > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!
 sleep 2
 
