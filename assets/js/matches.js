@@ -395,7 +395,6 @@
         };
         selectionArea.appendChild(selectBtn);
       }
-    }
     
     footer.appendChild(datetimeVenue);
     footer.appendChild(selectionArea);

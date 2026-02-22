@@ -1078,6 +1078,118 @@ app.post('/api/matches/archive-finished', async (req: Request, res: Response) =>
   }
 });
 
+// Get user standings based on match selections
+app.get('/api/standings', async (req: Request, res: Response) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    
+    // Get all users (excluding admin)
+    const users = await readUsers();
+    const regularUsers = users.filter(u => u.role !== 'admin');
+
+    // Get all match selections with status FT (finished)
+    const selections = await db.collection('match_selections').find({
+      status: 'FT'
+    }).toArray();
+
+    // Get all finished fixtures to calculate results
+    const fixtureIds = selections.map(s => s.fixtureId);
+    const fixtures = await db.collection('fixtures').find({
+      'fixture.id': { $in: fixtureIds },
+      'fixture.status.short': 'FT'
+    }).toArray();
+
+    // Create a map of fixture results
+    const fixtureMap = new Map();
+    fixtures.forEach(f => {
+      const homeGoals = f.goals?.home ?? 0;
+      const awayGoals = f.goals?.away ?? 0;
+      const totalGoals = homeGoals + awayGoals;
+      
+      let result = '0-0'; // Default to 0-0 (no goals)
+      if (totalGoals > 0 && totalGoals <= 2) {
+        result = 'G-0'; // 1-2 goals (low scoring)
+      } else if (totalGoals >= 3) {
+        result = 'GGG'; // 3+ goals (high scoring)
+      }
+      
+      fixtureMap.set(f.fixture.id, {
+        homeGoals,
+        awayGoals,
+        totalGoals,
+        result,
+        round: f.league?.round || ''
+      });
+    });
+
+    // Calculate stats for each user
+    const userStats = regularUsers.map(user => {
+      const userSelections = selections.filter(s => s.username === user.username);
+      
+      let GGG = 0;  // 3+ goals
+      let G0 = 0;   // 1-2 goals
+      let Z0 = 0;   // 0 goals
+      let totalGoals = 0;
+      const form: string[] = [];
+      const gameweeks: number[] = [];
+
+      userSelections.forEach(selection => {
+        const fixtureData = fixtureMap.get(selection.fixtureId);
+        if (fixtureData) {
+          totalGoals += fixtureData.totalGoals;
+          form.push(fixtureData.result);
+          
+          // Extract gameweek number from round string
+          const roundMatch = fixtureData.round.match(/\d+/);
+          if (roundMatch) {
+            gameweeks.push(parseInt(roundMatch[0]));
+          }
+          
+          if (fixtureData.result === 'GGG') GGG++;
+          else if (fixtureData.result === 'G-0') G0++;
+          else if (fixtureData.result === '0-0') Z0++;
+        }
+      });
+
+      const PL = userSelections.length; // Played (games selected)
+      const points = (GGG * 3) + (G0 * 1) + (Z0 * -1);
+      const ppg = PL > 0 ? points / PL : 0;
+
+      return {
+        username: user.username,
+        league: user.league || 'Unassigned',
+        PL,
+        GGG,
+        G0,
+        Z0,
+        GF: totalGoals,
+        points,
+        ppg: parseFloat(ppg.toFixed(2)),
+        form: form.slice(-5).reverse(), // Last 5 results, most recent first
+        gameweeks: gameweeks.sort((a, b) => a - b)
+      };
+    });
+
+    // Sort by points descending, then by goals
+    userStats.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      return b.GF - a.GF;
+    });
+
+    res.json({
+      success: true,
+      standings: userStats
+    });
+  } catch (error: any) {
+    console.error('Error calculating standings:', error);
+    res.status(500).json({ error: 'Failed to calculate standings', message: error.message });
+  }
+});
+
 // Get match selection history
 app.get('/api/matches/history', async (req: Request, res: Response) => {
   try {
