@@ -34,7 +34,19 @@
   </ul>
   <main class="container section">
     <h1>Premier League Fixtures</h1>
-    <p>View live, upcoming, and finished matches from the Premier League 2024-2025 season.</p>
+    <p>View live, upcoming, and finished matches from the Premier League.</p>
+
+    <div class="row">
+      <div class="col s12 m6 l4">
+        <div class="input-field">
+          <select id="season-selector">
+            <option value="2024" selected>2024 Season</option>
+            <option value="2025">2025 Season</option>
+          </select>
+          <label>Select Season</label>
+        </div>
+      </div>
+    </div>
 
     <section>
       <div id="matches-root">Loading...</div>

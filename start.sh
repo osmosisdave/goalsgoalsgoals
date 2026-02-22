@@ -153,7 +153,7 @@ fi
 
 # Start backend server
 echo -e "${YELLOW}Starting backend server on port $BACKEND_PORT...${NC}"
-PORT=$BACKEND_PORT node server/dist/server.js > logs/backend.log 2>&1 &
+PORT=$BACKEND_PORT cd server && node dist/server.js > ../logs/backend.log 2>&1 &
 BACKEND_PID=$!
 sleep 2
 
@@ -163,12 +163,6 @@ if ! kill -0 $BACKEND_PID 2>/dev/null; then
   echo -e "${YELLOW}Check logs/backend.log for details${NC}"
   tail -20 logs/backend.log
   exit 1
-fi
-
-# Check if backend is responding
-if ! curl -s http://localhost:$BACKEND_PORT/api/football/fixtures?league=39&season=2025 > /dev/null; then
-  echo -e "${YELLOW}⚠ Backend started but not responding yet, waiting...${NC}"
-  sleep 2
 fi
 
 echo -e "${GREEN}✓ Backend server running (PID: $BACKEND_PID)${NC}"
