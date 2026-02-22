@@ -304,26 +304,28 @@
     datetimeVenue.appendChild(datetime);
     datetimeVenue.appendChild(venue);
     
-    // Selection button/info for upcoming matches
+    // Selection button/info
     const selectionArea = document.createElement('div');
-    if (isUpcoming) {
-      if (selectedBy) {
-        // Show who selected it
-        const badge = document.createElement('span');
-        badge.style.padding = '4px 12px';
-        badge.style.borderRadius = '12px';
-        badge.style.fontSize = '11px';
-        badge.style.fontWeight = 'bold';
-        badge.style.display = 'inline-flex';
-        badge.style.alignItems = 'center';
-        badge.style.gap = '4px';
+    
+    // Show who picked it (for all matches, not just upcoming)
+    if (selectedBy) {
+      const badge = document.createElement('span');
+      badge.style.padding = '6px 12px';
+      badge.style.borderRadius = '12px';
+      badge.style.fontSize = '12px';
+      badge.style.fontWeight = 'bold';
+      badge.style.display = 'inline-flex';
+      badge.style.alignItems = 'center';
+      badge.style.gap = '4px';
+      
+      if (isSelectedByMe) {
+        badge.style.backgroundColor = isUpcoming ? '#4caf50' : '#81c784';
+        badge.style.color = 'white';
+        badge.innerHTML = `<i class="material-icons" style="font-size: 16px;">check_circle</i> Your Pick`;
+        selectionArea.appendChild(badge);
         
-        if (isSelectedByMe) {
-          badge.style.backgroundColor = '#4caf50';
-          badge.style.color = 'white';
-          badge.innerHTML = `<i class="material-icons" style="font-size: 14px;">check_circle</i> Your Pick`;
-          
-          // Add remove button
+        // Add remove button only for upcoming matches
+        if (isUpcoming) {
           const removeBtn = document.createElement('button');
           removeBtn.className = 'btn-small red lighten-1 waves-effect';
           removeBtn.style.marginLeft = '8px';
@@ -340,17 +342,17 @@
               removeBtn.disabled = false;
             }
           };
-          selectionArea.appendChild(badge);
           selectionArea.appendChild(removeBtn);
-        } else {
-          badge.style.backgroundColor = '#ff9800';
-          badge.style.color = 'white';
-          badge.innerHTML = `<i class="material-icons" style="font-size: 14px;">person</i> ${selectedBy}`;
-          selectionArea.appendChild(badge);
         }
-      } else if (currentUser) {
-        // Show select button
-        const selectBtn = document.createElement('button');
+      } else {
+        badge.style.backgroundColor = isUpcoming ? '#ff9800' : '#ffb74d';
+        badge.style.color = 'white';
+        badge.innerHTML = `<i class="material-icons" style="font-size: 16px;">person</i> Picked by ${selectedBy}`;
+        selectionArea.appendChild(badge);
+      }
+    } else if (isUpcoming && currentUser) {
+      // Show select button only for upcoming matches
+      const selectBtn = document.createElement('button');
         selectBtn.className = 'btn-small blue waves-effect';
         selectBtn.style.padding = '0 12px';
         selectBtn.style.height = '28px';

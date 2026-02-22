@@ -1,5 +1,7 @@
-// Standings renderer (mock data)
+// Standings renderer (fetch real users from database)
 (function () {
+  const API_BASE_URL = (window && window.GGG_API_ORIGIN) || 'http://localhost:4000';
+
   function elt(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
     Object.keys(attrs).forEach(k => {
@@ -17,7 +19,56 @@
     '0-0': '#f44336'  // red
   };
 
-  // Mock dataset
+  async function fetchUsers() {
+    try {
+      // Try to get token if user is logged in
+      const token = sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || 
+                   localStorage.getItem('ggg_token') || localStorage.getItem('token');
+      
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/users`, { headers });
+      
+      if (!response.ok) {
+        // If not authorized, return mock users
+        if (response.status === 401 || response.status === 403) {
+          console.log('Not authorized to fetch users, using mock data');
+          return [
+            { username: 'dave', league: null },
+            { username: 'wilson', league: null },
+            { username: 'steve', league: null },
+            { username: 'mick', league: null },
+            { username: 'dunn', league: null },
+            { username: 'daryl', league: null },
+            { username: 'danner', league: null },
+            { username: 'mint', league: null }
+          ];
+        }
+        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      }
+      
+      const users = await response.json();
+      return Array.isArray(users) ? users : (users.users || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      // Return mock users as fallback
+      return [
+        { username: 'dave', league: null },
+        { username: 'wilson', league: null },
+        { username: 'steve', league: null },
+        { username: 'mick', league: null },
+        { username: 'dunn', league: null },
+        { username: 'daryl', league: null },
+        { username: 'danner', league: null },
+        { username: 'mint', league: null }
+      ];
+    }
+  }
+
+  // Mock dataset - kept as fallback but will be replaced with real data
   const mockUsers = [
     { group: 'A', username: 'Dave', PL: 28, GGG: 21, G0: 7, Z0: 0, GF: 98, form: ['GGG','G-0','GGG','GGG','G-0'] },
     { group: 'A', username: 'Wilson', PL: 28, GGG: 20, G0: 8, Z0: 0, GF: 85, form: ['G-0','GGG','GGG','G-0','GGG'] },
@@ -135,14 +186,39 @@
     container.appendChild(containerDiv);
   }
 
-  function init() {
+  async function init() {
     const root = document.getElementById('leagues-root');
     if (!root) return;
+    root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+
+    // Fetch real users from database
+    const dbUsers = await fetchUsers();
+    
+    // Transform database users to match the expected format
+    const users = dbUsers
+      .filter(u => u.username !== 'admin') // Exclude admin user
+      .map(u => ({
+        group: u.league || 'Unassigned',
+        username: u.username,
+        PL: 0,
+        GGG: 0,
+        G0: 0,
+        Z0: 0,
+        GF: 0,
+        form: []
+      }));
+
+    // If no users found, show message
+    if (users.length === 0) {
+      root.innerHTML = '<p class="grey-text">No users found in the database.</p>';
+      return;
+    }
+
     root.innerHTML = '';
 
     // Group users
     const groups = {};
-    mockUsers.forEach(u => {
+    users.forEach(u => {
       groups[u.group] = groups[u.group] || [];
       groups[u.group].push(u);
     });
@@ -165,7 +241,7 @@
     });
 
     // Totals below
-    renderTotals(root, mockUsers);
+    renderTotals(root, users);
   }
 
   document.addEventListener('DOMContentLoaded', init);
