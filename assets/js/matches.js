@@ -6,7 +6,7 @@
   let currentUser = null;
   let selectedLeague = 'all';
   let selectedTeam = 'all';
-  let selectedSeason = '2024';
+  let selectedSeason = '2025';
 
   function getAuthToken() {
     return sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || 
@@ -105,8 +105,8 @@
 
   async function fetchFixtures() {
     try {
-      console.log('Fetching fixtures from:', `${API_BASE_URL}/api/football/fixtures?league=39&season=${selectedSeason}`);
-      const response = await fetch(`${API_BASE_URL}/api/football/fixtures?league=39&season=${selectedSeason}`);
+      console.log('Fetching fixtures from:', `${API_BASE_URL}/api/football/fixtures?season=${selectedSeason}`);
+      const response = await fetch(`${API_BASE_URL}/api/football/fixtures?season=${selectedSeason}`);
       console.log('Response status:', response.status);
       
       if (!response.ok) {
@@ -455,14 +455,48 @@
         );
       }
       
-      // Re-group fixtures by status each time we render (in case selections changed)
-      const upcomingFixtures = filteredFixtures.filter(f => f.fixture.status.short === 'NS');
-      const finishedFixtures = filteredFixtures.filter(f => ['FT', 'AET', 'PEN'].includes(f.fixture.status.short));
+      // Group fixtures by round number (gameweek)
+      const fixturesByRound = {};
+      filteredFixtures.forEach(f => {
+        // Extract round number from "Regular Season - 1" format
+        const roundMatch = f.league.round?.match(/(\d+)$/);
+        const roundNum = roundMatch ? parseInt(roundMatch[1]) : 1;
+        
+        if (!fixturesByRound[roundNum]) {
+          fixturesByRound[roundNum] = {
+            fixtures: [],
+            dates: new Set()
+          };
+        }
+        fixturesByRound[roundNum].fixtures.push(f);
+        // Track unique dates in this round
+        const date = new Date(f.fixture.date);
+        fixturesByRound[roundNum].dates.add(date.toISOString().split('T')[0]);
+      });
 
-      const tabs = [
-        { label: 'Upcoming', fixtures: upcomingFixtures, icon: 'schedule' },
-        { label: 'Finished', fixtures: finishedFixtures, icon: 'check_circle' }
-      ];
+      // Sort rounds numerically
+      const sortedRounds = Object.keys(fixturesByRound).map(Number).sort((a, b) => a - b);
+      
+      // Create tabs for each gameweek
+      const tabs = sortedRounds.map((roundNum) => {
+        const roundData = fixturesByRound[roundNum];
+        const dates = Array.from(roundData.dates).sort();
+        const dateRange = dates.length > 1 
+          ? `${new Date(dates[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${new Date(dates[dates.length - 1]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+          : new Date(dates[0]).toLocaleDateString('en-GB', { 
+              weekday: 'short', 
+              day: 'numeric', 
+              month: 'short',
+              year: 'numeric'
+            });
+        
+        return {
+          label: `GW ${roundNum}`,
+          fullLabel: dateRange,
+          fixtures: roundData.fixtures,
+          icon: 'event'
+        };
+      });
 
       root.innerHTML = '';
       
@@ -558,37 +592,82 @@
       filtersCard.appendChild(filtersContent);
       root.appendChild(filtersCard);
 
-      // Tab navigation
+      // Add info about total gameweeks
+      if (tabs.length > 0) {
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'center-align';
+        infoDiv.style.marginBottom = '10px';
+        infoDiv.innerHTML = `<span class="grey-text">Total Gameweeks: <strong>${tabs.length}</strong> | Total Fixtures: <strong>${filteredFixtures.length}</strong></span>`;
+        root.appendChild(infoDiv);
+      }
+
+      // Tab navigation (with scrollable tabs for many gameweeks)
+      const tabsContainer = document.createElement('div');
+      tabsContainer.style.overflowX = 'auto';
+      tabsContainer.style.whiteSpace = 'nowrap';
+      tabsContainer.style.borderBottom = '1px solid #e0e0e0';
+      
       const tabNav = document.createElement('ul');
       tabNav.className = 'tabs';
+      tabNav.style.display = 'flex';
+      tabNav.style.flexWrap = 'nowrap';
+      
       tabs.forEach((tab, idx) => {
         const li = document.createElement('li');
         li.className = 'tab';
+        li.style.flexShrink = '0';
         const a = document.createElement('a');
         a.href = '#';
         a.className = idx === currentTab ? 'active' : '';
         a.innerHTML = `<i class="material-icons left" style="font-size: 18px;">${tab.icon}</i>${tab.label} (${tab.fixtures.length})`;
+        a.title = tab.fullLabel; // Show full date on hover
         a.addEventListener('click', (e) => {
           e.preventDefault();
           currentTab = idx;
           window.renderPage();
+          // Scroll active tab into view
+          setTimeout(() => {
+            if (a.parentElement) {
+              a.parentElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+          }, 100);
         });
         li.appendChild(a);
         tabNav.appendChild(li);
       });
-      root.appendChild(tabNav);
+      
+      tabsContainer.appendChild(tabNav);
+      root.appendChild(tabsContainer);
+      
+      // Initialize Materialize tabs and scroll active tab into view
+      M.Tabs.init(tabNav);
+      setTimeout(() => {
+        const activeTab = tabNav.querySelector('.tab:nth-child(' + (currentTab + 1) + ')');
+        if (activeTab) {
+          activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }, 100);
 
       // Tab content
       const tabContent = document.createElement('div');
       tabContent.style.marginTop = '20px';
 
       const currentFixtures = tabs[currentTab].fixtures;
+      
+      // Add date header
+      if (tabs[currentTab]) {
+        const dateHeader = document.createElement('h5');
+        dateHeader.className = 'center-align grey-text text-darken-2';
+        dateHeader.style.marginBottom = '20px';
+        dateHeader.textContent = tabs[currentTab].fullLabel;
+        tabContent.appendChild(dateHeader);
+      }
 
       if (currentFixtures.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'grey-text center-align';
         empty.style.marginTop = '40px';
-        empty.textContent = `No ${tabs[currentTab].label.toLowerCase()} fixtures`;
+        empty.textContent = `No fixtures for this gameweek`;
         tabContent.appendChild(empty);
       } else {
         const collection = document.createElement('div');
