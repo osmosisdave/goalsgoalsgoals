@@ -1,5 +1,7 @@
-// Standings renderer (mock data)
+// Standings renderer (fetch real users from database)
 (function () {
+  const API_BASE_URL = (window && window.GGG_API_ORIGIN) || 'http://localhost:4000';
+
   function elt(tag, attrs = {}, children = []) {
     const e = document.createElement(tag);
     Object.keys(attrs).forEach(k => {
@@ -17,7 +19,73 @@
     '0-0': '#f44336'  // red
   };
 
-  // Mock dataset
+  async function fetchUsers() {
+    try {
+      // Try to get token if user is logged in
+      const token = sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || 
+                   localStorage.getItem('ggg_token') || localStorage.getItem('token');
+      
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/users`, { headers });
+      
+      if (!response.ok) {
+        // If not authorized, return mock users
+        if (response.status === 401 || response.status === 403) {
+          console.log('Not authorized to fetch users, using mock data');
+          return [
+            { username: 'dave', league: null },
+            { username: 'wilson', league: null },
+            { username: 'steve', league: null },
+            { username: 'mick', league: null },
+            { username: 'dunn', league: null },
+            { username: 'daryl', league: null },
+            { username: 'danner', league: null },
+            { username: 'mint', league: null }
+          ];
+        }
+        throw new Error(`Failed to fetch users: ${response.statusText}`);
+      }
+      
+      const users = await response.json();
+      return Array.isArray(users) ? users : (users.users || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      // Return mock users as fallback
+      return [
+        { username: 'dave', league: null },
+        { username: 'wilson', league: null },
+        { username: 'steve', league: null },
+        { username: 'mick', league: null },
+        { username: 'dunn', league: null },
+        { username: 'daryl', league: null },
+        { username: 'danner', league: null },
+        { username: 'mint', league: null }
+      ];
+    }
+  }
+
+  async function fetchStandings() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/standings`);
+      
+      if (!response.ok) {
+        console.error('Failed to fetch standings:', response.statusText);
+        return null;
+      }
+      
+      const data = await response.json();
+      return data.standings || [];
+    } catch (error) {
+      console.error('Error fetching standings:', error);
+      return null;
+    }
+  }
+
+  // Mock dataset - kept as fallback but will be replaced with real data
   const mockUsers = [
     { group: 'A', username: 'Dave', PL: 28, GGG: 21, G0: 7, Z0: 0, GF: 98, form: ['GGG','G-0','GGG','GGG','G-0'] },
     { group: 'A', username: 'Wilson', PL: 28, GGG: 20, G0: 8, Z0: 0, GF: 85, form: ['G-0','GGG','GGG','G-0','GGG'] },
@@ -31,13 +99,14 @@
   ];
 
   function computeStats(u) {
-    const PL = u.PL || (u.form ? u.form.length : 0);
-    const GGG = u.GGG || (u.form ? u.form.filter(s => s === 'GGG').length : 0);
-    const G0 = u.G0 || (u.form ? u.form.filter(s => s === 'G-0').length : 0);
-    const Z0 = u.Z0 || (u.form ? u.form.filter(s => s === '0-0').length : 0);
+    // Data now comes pre-calculated from the API
+    const PL = u.PL || 0;
+    const GGG = u.GGG || 0;
+    const G0 = u.G0 || 0;
+    const Z0 = u.Z0 || 0;
     const GF = u.GF || 0;
-    const points = (3 * GGG) + (1 * G0) + (-1 * Z0);
-    const ppg = PL > 0 ? (points / PL) : 0;
+    const points = u.points || 0;
+    const ppg = u.ppg || 0;
     return { PL, GGG, G0, Z0, GF, points, ppg };
   }
 
@@ -135,21 +204,27 @@
     container.appendChild(containerDiv);
   }
 
-  function init() {
+  async function init() {
     const root = document.getElementById('leagues-root');
     if (!root) return;
+    root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+
+    // Fetch standings data from the API
+    const standings = await fetchStandings();
+    
+    if (!standings || standings.length === 0) {
+      root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
+      return;
+    }
+
     root.innerHTML = '';
 
-    // Group users
+    // Group users by league
     const groups = {};
-    mockUsers.forEach(u => {
-      groups[u.group] = groups[u.group] || [];
-      groups[u.group].push(u);
-    });
-
-    // For each group sort by points desc
-    Object.keys(groups).forEach(g => {
-      groups[g].sort((a,b) => computeStats(b).points - computeStats(a).points);
+    standings.forEach(u => {
+      const groupName = u.league || 'Unassigned';
+      groups[groupName] = groups[groupName] || [];
+      groups[groupName].push(u);
     });
 
     // Render groups in order A..Z
@@ -165,7 +240,7 @@
     });
 
     // Totals below
-    renderTotals(root, mockUsers);
+    renderTotals(root, standings);
   }
 
   document.addEventListener('DOMContentLoaded', init);
