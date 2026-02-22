@@ -165,12 +165,6 @@ if ! kill -0 $BACKEND_PID 2>/dev/null; then
   exit 1
 fi
 
-# Check if backend is responding
-if ! curl -s http://localhost:$BACKEND_PORT/api/football/fixtures?league=39&season=2025 > /dev/null; then
-  echo -e "${YELLOW}⚠ Backend started but not responding yet, waiting...${NC}"
-  sleep 2
-fi
-
 echo -e "${GREEN}✓ Backend server running (PID: $BACKEND_PID)${NC}"
 
 # Start frontend server

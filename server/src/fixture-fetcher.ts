@@ -34,15 +34,6 @@ export const DEFAULT_LEAGUE_IDS = [
   848, // UEFA Europa Conference League
 ];
 
-// Fallback leagues if database query fails
-const DEFAULT_LEAGUES: League[] = [
-  { id: 39, name: 'Premier League', country: 'England' },
-  { id: 40, name: 'Championship', country: 'England' },
-  { id: 41, name: 'League One', country: 'England' },
-  { id: 42, name: 'League Two', country: 'England' },
-  { id: 43, name: 'National League', country: 'England' },
-];
-
 interface LeaguesResponse {
   get: string;
   parameters: Record<string, string>;
@@ -410,7 +401,6 @@ export class FixtureFetcher {
       console.log(`Saved leagues: ${newCount} new, ${updatedCount} updated`);
     } catch (error) {
       console.error('Failed to fetch leagues from API, using defaults');
-      leagues = DEFAULT_LEAGUES;
     }
 
     console.log(`Starting sync for ${leagues.length} leagues`);

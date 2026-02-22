@@ -6,6 +6,7 @@
   let currentUser = null;
   let selectedLeague = 'all';
   let selectedTeam = 'all';
+  let selectedSeason = '2024';
 
   function getAuthToken() {
     return sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || 
@@ -104,8 +105,8 @@
 
   async function fetchFixtures() {
     try {
-      console.log('Fetching fixtures from:', `${API_BASE_URL}/api/football/fixtures?league=39&season=2025`);
-      const response = await fetch(`${API_BASE_URL}/api/football/fixtures?league=39&season=2025`);
+      console.log('Fetching fixtures from:', `${API_BASE_URL}/api/football/fixtures?league=39&season=${selectedSeason}`);
+      const response = await fetch(`${API_BASE_URL}/api/football/fixtures?league=39&season=${selectedSeason}`);
       console.log('Response status:', response.status);
       
       if (!response.ok) {
@@ -411,6 +412,19 @@
 
     // Show loading state
     root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+
+    // Initialize season selector
+    const seasonSelector = document.getElementById('season-selector');
+    if (seasonSelector) {
+      M.FormSelect.init(seasonSelector);
+      seasonSelector.addEventListener('change', async (e) => {
+        selectedSeason = e.target.value;
+        root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+        allFixtures = await fetchFixtures();
+        await fetchSelections();
+        if (window.renderPage) window.renderPage();
+      });
+    }
 
     // Fetch current user and selections in parallel
     [currentUser, allFixtures] = await Promise.all([
