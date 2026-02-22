@@ -742,7 +742,7 @@ app.get('/api/football/fixtures', async (req: Request, res: Response) => {
     const fixtures = await db.collection('fixtures')
       .find(query)
       .sort({ 'fixture.date': 1 })
-      .limit(100)
+      .limit(10000)
       .toArray();
 
     res.json({
