@@ -1,122 +1,69 @@
-// Standings renderer (fetch real users from database)
-(function () {
-  const API_BASE_URL = (window && window.GGG_API_ORIGIN) || 'http://localhost:4000';
-
-  function elt(tag, attrs = {}, children = []) {
-    const e = document.createElement(tag);
-    Object.keys(attrs).forEach(k => {
-      if (k === 'text') e.textContent = attrs[k];
-      else e.setAttribute(k, attrs[k]);
-    });
-    (children || []).forEach(c => e.appendChild(c));
-    return e;
-  }
-
-  // Colors for form badges
-  const FORM_COLOR = {
+// Standings renderer — compiled to assets/js/standings.js by `npm run build` (root tsconfig).
+// ----- Constants -----
+const FORM_COLOR = {
     'GGG': '#4caf50', // green
     'G-0': '#ffeb3b', // yellow
-    '0-0': '#f44336'  // red
-  };
-
-  async function fetchUsers() {
+    '0-0': '#f44336', // red
+};
+// ----- Helpers -----
+// Typed wrapper for elt — used to create simple text-content cells quickly.
+function elt(tag, attrs = {}, children = []) {
+    const e = document.createElement(tag);
+    Object.keys(attrs).forEach(k => {
+        if (k === 'text')
+            e.textContent = attrs[k];
+        else
+            e.setAttribute(k, attrs[k]);
+    });
+    children.forEach(c => e.appendChild(c));
+    return e;
+}
+// ----- API -----
+async function fetchStandings() {
+    const apiBase = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
     try {
-      // Try to get token if user is logged in
-      const token = sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || 
-                   localStorage.getItem('ggg_token') || localStorage.getItem('token');
-      
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/api/users`, { headers });
-      
-      if (!response.ok) {
-        // Not authorised — standings can still render without user data
-        if (response.status === 401 || response.status === 403) {
-          console.warn('Not authorised to fetch users; standings will show API data only.');
-          return [];
+        const response = await fetch(`${apiBase}/api/standings`);
+        if (!response.ok) {
+            console.error('Failed to fetch standings:', response.statusText);
+            return null;
         }
-        throw new Error(`Failed to fetch users: ${response.statusText}`);
-      }
-      
-      const users = await response.json();
-      return Array.isArray(users) ? users : (users.users || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      return [];
+        const data = await response.json();
+        return data.standings || [];
     }
-  }
-
-  async function fetchStandings() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/standings`);
-      
-      if (!response.ok) {
-        console.error('Failed to fetch standings:', response.statusText);
+    catch (error) {
+        console.error('Error fetching standings:', error);
         return null;
-      }
-      
-      const data = await response.json();
-      return data.standings || [];
-    } catch (error) {
-      console.error('Error fetching standings:', error);
-      return null;
     }
-  }
-
-  // Mock dataset - kept as fallback but will be replaced with real data
-  const mockUsers = [
-    { group: 'A', username: 'Dave', PL: 28, GGG: 21, G0: 7, Z0: 0, GF: 98, form: ['GGG','G-0','GGG','GGG','G-0'] },
-    { group: 'A', username: 'Wilson', PL: 28, GGG: 20, G0: 8, Z0: 0, GF: 85, form: ['G-0','GGG','GGG','G-0','GGG'] },
-    { group: 'A', username: 'Stevo', PL: 28, GGG: 19, G0: 8, Z0: 1, GF: 89, form: ['G-0','GGG','GGG','GGG','GGG'] },
-    { group: 'A', username: 'Mint', PL: 28, GGG: 17, G0: 10, Z0: 1, GF: 80, form: ['G-0','GGG','GGG','G-0','0-0'] },
-
-    { group: 'B', username: 'Daryl', PL: 28, GGG: 17, G0: 9, Z0: 2, GF: 77, form: ['0-0','G-0','G-0','GGG','0-0'] },
-    { group: 'B', username: 'Smallz', PL: 28, GGG: 16, G0: 11, Z0: 1, GF: 75, form: ['G-0','GGG','G-0','GGG','GGG'] },
-    { group: 'B', username: 'Dunn', PL: 28, GGG: 14, G0: 12, Z0: 2, GF: 87, form: ['GGG','GGG','GGG','G-0','0-0'] },
-    { group: 'B', username: 'Danner', PL: 28, GGG: 11, G0: 16, Z0: 1, GF: 70, form: ['G-0','G-0','GGG','G-0','GGG'] }
-  ];
-
-  function computeStats(u) {
-    // Data now comes pre-calculated from the API
-    const PL = u.PL || 0;
-    const GGG = u.GGG || 0;
-    const G0 = u.G0 || 0;
-    const Z0 = u.Z0 || 0;
-    const GF = u.GF || 0;
-    const points = u.points || 0;
-    const ppg = u.ppg || 0;
-    return { PL, GGG, G0, Z0, GF, points, ppg };
-  }
-
-  function formatPPG(n) {
+}
+// ----- Render helpers -----
+function computeStats(u) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    return {
+        PL: (_a = u.PL) !== null && _a !== void 0 ? _a : 0,
+        GGG: (_b = u.GGG) !== null && _b !== void 0 ? _b : 0,
+        G0: (_c = u.G0) !== null && _c !== void 0 ? _c : 0,
+        Z0: (_d = u.Z0) !== null && _d !== void 0 ? _d : 0,
+        GF: (_e = u.GF) !== null && _e !== void 0 ? _e : 0,
+        points: (_f = u.points) !== null && _f !== void 0 ? _f : 0,
+        ppg: (_g = u.ppg) !== null && _g !== void 0 ? _g : 0,
+    };
+}
+function formatPPG(n) {
     return n.toFixed(2);
-  }
-
-  function createFormCell(form) {
+}
+function createFormCell(form) {
     const container = document.createElement('div');
-    container.style.display = 'flex';
-    container.style.gap = '6px';
-    container.style.alignItems = 'center';
-    (form || []).slice(0,5).forEach(s => {
-      const dot = document.createElement('div');
-      dot.style.width = '22px';
-      dot.style.height = '22px';
-      dot.style.borderRadius = '50%';
-      dot.style.background = FORM_COLOR[s] || '#ccc';
-      dot.style.display = 'inline-block';
-      dot.title = s;
-      container.appendChild(dot);
+    container.style.cssText = 'display:flex;gap:6px;align-items:center;';
+    (form || []).slice(0, 5).forEach(s => {
+        const dot = document.createElement('div');
+        dot.style.cssText = `width:22px;height:22px;border-radius:50%;background:${FORM_COLOR[s] || '#ccc'};display:inline-block;`;
+        dot.title = s;
+        container.appendChild(dot);
     });
     return container;
-  }
-
-  function renderGroup(container, groupName, users) {
-    const title = elt('h5', { text: groupName });
-    container.appendChild(title);
-
+}
+function renderGroup(container, groupName, users) {
+    container.appendChild(elt('h5', { text: groupName }));
     const table = document.createElement('table');
     table.className = 'striped responsive-table';
     table.style.marginBottom = '1rem';
@@ -124,105 +71,82 @@
     thead.innerHTML = '<tr><th></th><th>Name</th><th>PL</th><th>GGG</th><th>G-0</th><th>0-0</th><th>GF</th><th>Pts</th><th>PPG</th><th>Form</th></tr>';
     table.appendChild(thead);
     const tbody = document.createElement('tbody');
-
     users.forEach((u, idx) => {
-      const s = computeStats(u);
-      const tr = document.createElement('tr');
-      const rankTd = elt('td', { text: String(idx + 1) });
-      tr.appendChild(rankTd);
-      tr.appendChild(elt('td', { text: u.username }));
-      tr.appendChild(elt('td', { text: String(s.PL) }));
-      tr.appendChild(elt('td', { text: String(s.GGG) }));
-      tr.appendChild(elt('td', { text: String(s.G0) }));
-      tr.appendChild(elt('td', { text: String(s.Z0) }));
-      tr.appendChild(elt('td', { text: String(s.GF) }));
-      tr.appendChild(elt('td', { text: String(s.points) }));
-      tr.appendChild(elt('td', { text: formatPPG(s.ppg) }));
-      const formTd = document.createElement('td');
-      formTd.appendChild(createFormCell(u.form));
-      tr.appendChild(formTd);
-      tbody.appendChild(tr);
+        const s = computeStats(u);
+        const tr = document.createElement('tr');
+        tr.appendChild(elt('td', { text: String(idx + 1) }));
+        tr.appendChild(elt('td', { text: u.username }));
+        tr.appendChild(elt('td', { text: String(s.PL) }));
+        tr.appendChild(elt('td', { text: String(s.GGG) }));
+        tr.appendChild(elt('td', { text: String(s.G0) }));
+        tr.appendChild(elt('td', { text: String(s.Z0) }));
+        tr.appendChild(elt('td', { text: String(s.GF) }));
+        tr.appendChild(elt('td', { text: String(s.points) }));
+        tr.appendChild(elt('td', { text: formatPPG(s.ppg) }));
+        const formTd = document.createElement('td');
+        formTd.appendChild(createFormCell(u.form));
+        tr.appendChild(formTd);
+        tbody.appendChild(tr);
     });
-
     table.appendChild(tbody);
     container.appendChild(table);
-  }
-
-  function renderTotals(container, allUsers) {
+}
+function renderTotals(container, allUsers) {
     const totals = allUsers.reduce((acc, u) => {
-      const s = computeStats(u);
-      acc.PL += s.PL;
-      acc.GGG += s.GGG;
-      acc.G0 += s.G0;
-      acc.Z0 += s.Z0;
-      acc.GF += s.GF;
-      acc.points += s.points;
-      return acc;
-    }, { PL:0, GGG:0, G0:0, Z0:0, GF:0, points:0 });
-
-    const ppg = totals.PL > 0 ? (totals.points / totals.PL) : 0;
-
-    const containerDiv = document.createElement('div');
-    containerDiv.style.marginTop = '0.5rem';
+        const s = computeStats(u);
+        acc.PL += s.PL;
+        acc.GGG += s.GGG;
+        acc.G0 += s.G0;
+        acc.Z0 += s.Z0;
+        acc.GF += s.GF;
+        acc.points += s.points;
+        return acc;
+    }, { PL: 0, GGG: 0, G0: 0, Z0: 0, GF: 0, points: 0 });
+    const ppg = totals.PL > 0 ? totals.points / totals.PL : 0;
+    const wrapper = document.createElement('div');
+    wrapper.style.marginTop = '0.5rem';
     const table = document.createElement('table');
     table.className = 'striped';
     table.innerHTML = `<thead><tr><th></th><th>Totals</th><th>PL</th><th>GGG</th><th>G-0</th><th>0-0</th><th>GF</th><th>Pts</th><th>PPG</th><th></th></tr></thead>`;
     const tbody = document.createElement('tbody');
     const tr = document.createElement('tr');
-    tr.appendChild(elt('td', { text: '' }));
-    tr.appendChild(elt('td', { text: '' }));
-    tr.appendChild(elt('td', { text: String(totals.PL) }));
-    tr.appendChild(elt('td', { text: String(totals.GGG) }));
-    tr.appendChild(elt('td', { text: String(totals.G0) }));
-    tr.appendChild(elt('td', { text: String(totals.Z0) }));
-    tr.appendChild(elt('td', { text: String(totals.GF) }));
-    tr.appendChild(elt('td', { text: String(totals.points) }));
-    tr.appendChild(elt('td', { text: formatPPG(ppg) }));
-    tr.appendChild(elt('td', { text: '' }));
+    [
+        '', '',
+        String(totals.PL), String(totals.GGG), String(totals.G0),
+        String(totals.Z0), String(totals.GF), String(totals.points),
+        formatPPG(ppg), '',
+    ].forEach(text => tr.appendChild(elt('td', { text })));
     tbody.appendChild(tr);
     table.appendChild(tbody);
-    containerDiv.appendChild(table);
-    container.appendChild(containerDiv);
-  }
-
-  async function init() {
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
+}
+// ----- Entry point -----
+async function init() {
     const root = document.getElementById('leagues-root');
-    if (!root) return;
+    if (!root)
+        return;
     root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
-
-    // Fetch standings data from the API
     const standings = await fetchStandings();
-    
     if (!standings || standings.length === 0) {
-      root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
-      return;
+        root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
+        return;
     }
-
     root.innerHTML = '';
-
-    // Group users by league
+    // Group users by their assigned league
     const groups = {};
     standings.forEach(u => {
-      const groupName = u.league || 'Unassigned';
-      groups[groupName] = groups[groupName] || [];
-      groups[groupName].push(u);
+        const groupName = u.league || 'Unassigned';
+        groups[groupName] = groups[groupName] || [];
+        groups[groupName].push(u);
     });
-
-    // Render groups in order A..Z
-    const groupNames = Object.keys(groups).sort();
-    groupNames.forEach(g => {
-      renderGroup(root, g, groups[g]);
-      // dashed separator
-      const hr = document.createElement('hr');
-      hr.style.border = 'none';
-      hr.style.borderTop = '1px dashed #999';
-      hr.style.margin = '8px 0 16px 0';
-      root.appendChild(hr);
+    Object.keys(groups).sort().forEach(g => {
+        renderGroup(root, g, groups[g]);
+        const hr = document.createElement('hr');
+        hr.style.cssText = 'border:none;border-top:1px dashed #999;margin:8px 0 16px 0;';
+        root.appendChild(hr);
     });
-
-    // Totals below
     renderTotals(root, standings);
-  }
-
-  document.addEventListener('DOMContentLoaded', init);
-})();
+}
+document.addEventListener('DOMContentLoaded', init);
+export {};

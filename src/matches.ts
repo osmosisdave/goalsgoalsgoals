@@ -1,74 +1,14 @@
 // Matches - Fetch fixtures from database
 // Compiled to assets/js/matches.js by `npm run build` (root tsconfig).
 
-// ----- API response types -----
-
-interface FixtureStatus {
-  short: string;
-  long: string;
-  elapsed: number | null;
-}
-
-interface FixtureVenue {
-  name: string | null;
-  city: string | null;
-}
-
-interface FixtureInfo {
-  id: number;
-  date: string;
-  status: FixtureStatus;
-  venue: FixtureVenue;
-}
-
-interface LeagueInfo {
-  id: number;
-  name: string;
-  round: string;
-}
-
-interface TeamInfo {
-  id: number;
-  name: string;
-  winner: boolean | null;
-}
-
-interface GoalsInfo {
-  home: number | null;
-  away: number | null;
-}
-
-interface Fixture {
-  fixture: FixtureInfo;
-  league: LeagueInfo;
-  teams: { home: TeamInfo; away: TeamInfo };
-  goals: GoalsInfo;
-}
-
-interface FixturesApiResponse {
-  response: Fixture[];
-  results: number;
-}
-
-interface SelectionRecord {
-  fixtureId: number;
-  username: string;
-}
-
-interface SelectionsApiResponse {
-  selections: SelectionRecord[];
-}
-
-interface SelectMatchApiResponse {
-  replaced?: boolean;
-  message?: string;
-}
-
-interface MeApiResponse {
-  username?: string;
-  sub?: string;
-  role?: string;
-}
+import type {
+  Fixture,
+  FixturesDbResponse,
+  SelectionRecord,
+  SelectionsResponse,
+  SelectMatchResponse,
+  MeResponse,
+} from './api-types';
 
 // ----- IIFE to avoid polluting the global scope -----
 
@@ -96,8 +36,8 @@ interface MeApiResponse {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.ok) {
-        const data: MeApiResponse = await response.json();
-        return data.username || data.sub || null;
+        const data: MeResponse = await response.json();
+        return data.username || null;
       }
     } catch (error) {
       console.error('Error fetching current user:', error);
@@ -109,7 +49,7 @@ interface MeApiResponse {
     try {
       const response = await fetch(`${API_BASE_URL}/api/matches/selections`);
       if (response.ok) {
-        const data: SelectionsApiResponse = await response.json();
+        const data: SelectionsResponse = await response.json();
         matchSelections = {};
         data.selections.forEach(s => {
           matchSelections[s.fixtureId] = s.username;
@@ -134,7 +74,7 @@ interface MeApiResponse {
           'Content-Type': 'application/json'
         }
       });
-      const data: SelectMatchApiResponse = await response.json();
+      const data: SelectMatchResponse = await response.json();
       if (response.ok) {
         const message = data.replaced ? '✓ Match selection updated!' : '✓ Match selected!';
         M.toast({ html: message, classes: 'green', displayLength: 3000 });
@@ -178,7 +118,7 @@ interface MeApiResponse {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      const data: FixturesApiResponse = await response.json();
+      const data: FixturesDbResponse = await response.json();
       console.log('Received fixtures:', data.results);
       return data.response || [];
     } catch (error) {

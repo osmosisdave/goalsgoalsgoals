@@ -1,14 +1,9 @@
-type User = {
-  username: string;
-  password: string; // plaintext for prototype only
-  role?: string;
-};
+import type { MeResponse, LoginResponse, CreateUserResponse, UserRecord } from './api-types';
 
 /**
  * Client-side auth module (connects to a simple server-side auth API).
  * This client stores the JWT in sessionStorage for the prototype.
  */
-type UserInfo = { username: string; role?: string };
 
 const TOKEN_KEY = 'ggg_token';
 
@@ -25,8 +20,8 @@ export async function login(username: string, password: string): Promise<boolean
       body: JSON.stringify({ username, password }),
     });
     if (!res.ok) return false;
-    const { token } = await res.json();
-    sessionStorage.setItem(TOKEN_KEY, token);
+    const body: LoginResponse = await res.json();
+    sessionStorage.setItem(TOKEN_KEY, body.token);
     return true;
   } catch (e) {
     return false;
@@ -41,13 +36,13 @@ export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
 }
 
-export async function currentUser(): Promise<UserInfo | null> {
+export async function currentUser(): Promise<MeResponse | null> {
   const token = getToken();
   if (!token) return null;
   try {
     const res = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
-    return await res.json();
+    return await res.json() as MeResponse;
   } catch (e) {
     return null;
   }
@@ -58,7 +53,7 @@ export async function requireAuth(redirect = 'login.html') {
   if (!u) window.location.href = redirect;
 }
 
-export async function createUser(username: string, password: string, role = 'user') {
+export async function createUser(username: string, password: string, role = 'user'): Promise<CreateUserResponse> {
   const token = getToken();
   if (!token) throw new Error('Not authenticated');
   const res = await fetch(apiUrl('/api/users'), {
@@ -107,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const token = getToken();
       fetch(apiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
         .then((r) => r.json())
-        .then((users: Array<{ username: string; role?: string }>) => {
+        .then((users: UserRecord[]) => {
           users.forEach((u) => {
             const li = document.createElement('li');
             li.className = 'collection-item';
@@ -140,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const token = getToken();
                     fetch(apiUrl('/api/users'), { headers: { Authorization: `Bearer ${token}` } })
               .then((r) => r.json())
-              .then((users: Array<{ username: string; role?: string }>) => {
+              .then((users: UserRecord[]) => {
                 users.forEach((u) => {
                   const li = document.createElement('li');
                   li.className = 'collection-item';

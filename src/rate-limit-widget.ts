@@ -1,24 +1,31 @@
 // API Rate Limit Status Widget — compiled to assets/js/rate-limit-widget.js by `npm run build`.
 // Auto-initialises when a #api-rate-limit-widget element exists on the page.
 // Also exposed on window.RateLimitWidget for manual initialisation.
+
+import type { RateLimitStatus } from './api-types';
+
 const API_BASE_URL = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
+
 class RateLimitWidget {
-    constructor(containerId) {
-        const el = document.getElementById(containerId);
-        if (!el) {
-            console.error(`RateLimitWidget: container #${containerId} not found`);
-            // Assign a dummy element so the class is always fully constructed.
-            this.container = document.createElement('div');
-            return;
-        }
-        this.container = el;
-        this.render();
-        this.fetchStatus();
-        // Auto-refresh every 30 seconds
-        setInterval(() => this.fetchStatus(), 30000);
+  private container: HTMLElement;
+
+  constructor(containerId: string) {
+    const el = document.getElementById(containerId);
+    if (!el) {
+      console.error(`RateLimitWidget: container #${containerId} not found`);
+      // Assign a dummy element so the class is always fully constructed.
+      this.container = document.createElement('div');
+      return;
     }
-    render() {
-        this.container.innerHTML = `
+    this.container = el;
+    this.render();
+    this.fetchStatus();
+    // Auto-refresh every 30 seconds
+    setInterval(() => this.fetchStatus(), 30_000);
+  }
+
+  private render(): void {
+    this.container.innerHTML = `
       <div class="card" id="rate-limit-card">
         <div class="card-content">
           <span class="card-title">API Usage</span>
@@ -28,39 +35,41 @@ class RateLimitWidget {
         </div>
       </div>
     `;
+  }
+
+  async fetchStatus(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/rate-limit/status`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data: RateLimitStatus = await response.json();
+      this.updateDisplay(data);
+    } catch (error) {
+      console.error('Error fetching rate limit status:', error);
+      this.showError();
     }
-    async fetchStatus() {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/rate-limit/status`);
-            if (!response.ok)
-                throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            this.updateDisplay(data);
-        }
-        catch (error) {
-            console.error('Error fetching rate limit status:', error);
-            this.showError();
-        }
+  }
+
+  private updateDisplay(status: RateLimitStatus): void {
+    const content = document.getElementById('rate-limit-content');
+    if (!content) return;
+
+    const percentage = Math.round((status.count / status.softLimit) * 100);
+
+    let statusColor = 'green';
+    let statusText = 'Good';
+    if (status.isBlocked) {
+      statusColor = 'red';
+      statusText = 'Limit Reached';
+    } else if (status.isNearLimit) {
+      statusColor = 'orange';
+      statusText = 'Near Limit';
     }
-    updateDisplay(status) {
-        const content = document.getElementById('rate-limit-content');
-        if (!content)
-            return;
-        const percentage = Math.round((status.count / status.softLimit) * 100);
-        let statusColor = 'green';
-        let statusText = 'Good';
-        if (status.isBlocked) {
-            statusColor = 'red';
-            statusText = 'Limit Reached';
-        }
-        else if (status.isNearLimit) {
-            statusColor = 'orange';
-            statusText = 'Near Limit';
-        }
-        const expiryDate = status.oldestCallExpiry
-            ? new Date(status.oldestCallExpiry).toLocaleString()
-            : 'N/A';
-        content.innerHTML = `
+
+    const expiryDate = status.oldestCallExpiry
+      ? new Date(status.oldestCallExpiry).toLocaleString()
+      : 'N/A';
+
+    content.innerHTML = `
       <div style="margin-bottom:15px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <span style="font-size:24px;font-weight:bold;">${status.count} / ${status.softLimit}</span>
@@ -93,25 +102,26 @@ class RateLimitWidget {
           </p>
         </div>` : ''}
     `;
-    }
-    showError() {
-        const content = document.getElementById('rate-limit-content');
-        if (!content)
-            return;
-        content.innerHTML = `
+  }
+
+  private showError(): void {
+    const content = document.getElementById('rate-limit-content');
+    if (!content) return;
+    content.innerHTML = `
       <p class="red-text">
         <i class="material-icons tiny">error</i>
         Unable to load API usage status
       </p>
     `;
-    }
+  }
 }
+
 // Auto-initialise if the standard container element is present.
 document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('api-rate-limit-widget')) {
-        new RateLimitWidget('api-rate-limit-widget');
-    }
+  if (document.getElementById('api-rate-limit-widget')) {
+    new RateLimitWidget('api-rate-limit-widget');
+  }
 });
+
 // Expose for manual initialisation from inline scripts.
 window.RateLimitWidget = RateLimitWidget;
-export {};

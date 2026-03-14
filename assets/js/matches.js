@@ -1,4 +1,3 @@
-"use strict";
 // Matches - Fetch fixtures from database
 // Compiled to assets/js/matches.js by `npm run build` (root tsconfig).
 // ----- IIFE to avoid polluting the global scope -----
@@ -25,7 +24,7 @@
             });
             if (response.ok) {
                 const data = await response.json();
-                return data.username || data.sub || null;
+                return data.username || null;
             }
         }
         catch (error) {
@@ -530,3 +529,4 @@
         window.renderPage();
     });
 })();
+export {};

@@ -1,109 +1,93 @@
-// Home auth helper: replace 'Login' with username when logged in
-(function () {
-  const USE_MOCK = !!(window && window.GGG_USE_MOCK_API);
-  function apiUrl(path) {
-    const origin = (window && window.GGG_API_ORIGIN) || '';
-    if (origin) return origin.replace(/\/$/, '') + path;
-    return path;
-  }
-
-  function getAuthToken() {
-    return sessionStorage.getItem('ggg_token') || sessionStorage.getItem('token') || localStorage.getItem('ggg_token') || localStorage.getItem('token') || null;
-  }
-
-  function parseJwtUsername(token) {
+// Home page auth helper — compiled to assets/js/home-auth.js by `npm run build`.
+// Runs on index.html: redirects unauthenticated users to login, then replaces
+// the Login nav link with the username and shows admin-only tiles.
+const USE_MOCK = !!window.GGG_USE_MOCK_API;
+function apiUrl(path) {
+    const origin = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
+    return origin + path;
+}
+function getToken() {
+    return sessionStorage.getItem('ggg_token');
+}
+/** Best-effort username extraction from a JWT without verifying the signature. */
+function parseJwtUsername(token) {
     try {
-      const parts = token.split('.');
-      if (parts.length < 2) return null;
-      const payload = parts[1];
-      const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-      const obj = JSON.parse(decodeURIComponent(escape(json)));
-      return obj.sub || obj.username || null;
-    } catch (e) {
-      return null;
+        const parts = token.split('.');
+        if (parts.length < 2)
+            return null;
+        const json = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+        const obj = JSON.parse(decodeURIComponent(escape(json)));
+        return obj.sub || obj.username || null;
     }
-  }
-
-  async function fetchMe(token) {
-    if (!token) return null;
-    if (USE_MOCK && String(token).startsWith('mock.')) {
-      try {
-        const payload = JSON.parse(atob(String(token).slice(5)));
-        return { username: payload.sub, role: payload.role };
-      } catch (e) {
-        return { username: 'admin', role: 'admin' };
-      }
+    catch (_a) {
+        return null;
+    }
+}
+async function fetchMe(token) {
+    // Mock mode: decode a locally-minted mock token without hitting the network.
+    if (USE_MOCK && token.startsWith('mock.')) {
+        try {
+            const payload = JSON.parse(atob(token.slice(5)));
+            return { username: payload.sub, role: payload.role };
+        }
+        catch (_a) {
+            return { username: 'admin', role: 'admin' };
+        }
     }
     try {
-      const res = await fetch(apiUrl('/api/me'), { headers: { Authorization: 'Bearer ' + token } });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data || null;
-    } catch (e) {
-      return null;
+        const res = await fetch(apiUrl('/api/me'), { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok)
+            return null;
+        return await res.json();
     }
-  }
-
-  function setNavToUsername(username) {
+    catch (_b) {
+        return null;
+    }
+}
+function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, s => { var _a; return (_a = ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[s]) !== null && _a !== void 0 ? _a : s; });
+}
+function setNavToUsername(username) {
+    var _a, _b;
     const desktop = document.getElementById('nav-login-link');
     const mobile = document.getElementById('nav-login-link-mobile');
-    if (desktop) {
-      desktop.innerHTML = `<a href="#" id="nav-username">${escapeHtml(username)}</a>`;
-    }
-    if (mobile) {
-      mobile.innerHTML = `<a href="#" id="nav-username-mobile">${escapeHtml(username)}</a>`;
-    }
-    // attach logout behavior
-    const el = document.getElementById('nav-username');
-    const elm = document.getElementById('nav-username-mobile');
+    const safe = escapeHtml(username);
+    if (desktop)
+        desktop.innerHTML = `<a href="#" id="nav-username">${safe}</a>`;
+    if (mobile)
+        mobile.innerHTML = `<a href="#" id="nav-username-mobile">${safe}</a>`;
     function logoutHandler(e) {
-      e.preventDefault();
-      if (!confirm('Log out ' + username + '?')) return;
-      sessionStorage.removeItem('ggg_token');
-      sessionStorage.removeItem('token');
-      localStorage.removeItem('ggg_token');
-      localStorage.removeItem('token');
-      location.reload();
+        e.preventDefault();
+        if (!confirm(`Log out ${username}?`))
+            return;
+        sessionStorage.removeItem('ggg_token');
+        location.reload();
     }
-    if (el) el.addEventListener('click', logoutHandler);
-    if (elm) elm.addEventListener('click', logoutHandler);
-  }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>"']/g, function (s) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[s];
-    });
-  }
-
-  (async function init() {
-    const token = getAuthToken();
-    // Redirect unauthenticated users to the login page
+    (_a = document.getElementById('nav-username')) === null || _a === void 0 ? void 0 : _a.addEventListener('click', logoutHandler);
+    (_b = document.getElementById('nav-username-mobile')) === null || _b === void 0 ? void 0 : _b.addEventListener('click', logoutHandler);
+}
+(async function init() {
+    var _a, _b;
+    const token = getToken();
     if (!token) {
-      window.location.href = 'login.html';
-      return;
+        window.location.href = 'login.html';
+        return;
     }
     const me = await fetchMe(token);
-    let username = null;
-    let role = null;
-    if (me) {
-      username = me.username || me.sub || null;
-      role = me.role || null;
-    }
+    // Fall back to JWT decode if the /api/me call fails (e.g. expired token)
+    const username = (_a = me === null || me === void 0 ? void 0 : me.username) !== null && _a !== void 0 ? _a : parseJwtUsername(token);
+    const role = (_b = me === null || me === void 0 ? void 0 : me.role) !== null && _b !== void 0 ? _b : null;
     if (!username) {
-      username = parseJwtUsername(token) || null;
+        window.location.href = 'login.html';
+        return;
     }
-    if (username) setNavToUsername(username);
-    // show admin tile when role is admin
-    try {
-      if (role === 'admin') {
-        const t = document.getElementById('admin-tile');
-        if (t) t.style.display = '';
-        const lm = document.getElementById('league-mgmt-tile');
-        if (lm) lm.style.display = '';
-        const rl = document.getElementById('rate-limiter-tile');
-        if (rl) rl.style.display = '';
-      }
-    } catch (e) {}
-  })();
+    setNavToUsername(username);
+    if (role === 'admin') {
+        ['admin-tile', 'league-mgmt-tile', 'rate-limiter-tile'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el)
+                el.style.display = '';
+        });
+    }
 })();
+export {};
