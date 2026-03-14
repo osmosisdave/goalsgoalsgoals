@@ -1,3 +1,7 @@
+/**
+ * Client-side auth module (connects to a simple server-side auth API).
+ * This client stores the JWT in sessionStorage for the prototype.
+ */
 const TOKEN_KEY = 'ggg_token';
 // API origin can be set on the page via `window.GGG_API_ORIGIN` (see assets/js/config.js).
 // If empty, relative paths are used (useful for local dev where server and site are same origin).
@@ -12,8 +16,8 @@ export async function login(username, password) {
         });
         if (!res.ok)
             return false;
-        const { token } = await res.json();
-        sessionStorage.setItem(TOKEN_KEY, token);
+        const body = await res.json();
+        sessionStorage.setItem(TOKEN_KEY, body.token);
         return true;
     }
     catch (e) {
