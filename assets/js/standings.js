@@ -33,19 +33,10 @@
       const response = await fetch(`${API_BASE_URL}/api/users`, { headers });
       
       if (!response.ok) {
-        // If not authorized, return mock users
+        // Not authorised — standings can still render without user data
         if (response.status === 401 || response.status === 403) {
-          console.log('Not authorized to fetch users, using mock data');
-          return [
-            { username: 'dave', league: null },
-            { username: 'wilson', league: null },
-            { username: 'steve', league: null },
-            { username: 'mick', league: null },
-            { username: 'dunn', league: null },
-            { username: 'daryl', league: null },
-            { username: 'danner', league: null },
-            { username: 'mint', league: null }
-          ];
+          console.warn('Not authorised to fetch users; standings will show API data only.');
+          return [];
         }
         throw new Error(`Failed to fetch users: ${response.statusText}`);
       }
@@ -54,17 +45,7 @@
       return Array.isArray(users) ? users : (users.users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      // Return mock users as fallback
-      return [
-        { username: 'dave', league: null },
-        { username: 'wilson', league: null },
-        { username: 'steve', league: null },
-        { username: 'mick', league: null },
-        { username: 'dunn', league: null },
-        { username: 'daryl', league: null },
-        { username: 'danner', league: null },
-        { username: 'mint', league: null }
-      ];
+      return [];
     }
   }
 
