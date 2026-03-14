@@ -1,8 +1,8 @@
 const TOKEN_KEY = 'ggg_token';
-// API origin can be set on the page via `window.GGG_API_ORIGIN`.
+// API origin can be set on the page via `window.GGG_API_ORIGIN` (see assets/js/config.js).
 // If empty, relative paths are used (useful for local dev where server and site are same origin).
-const API_ORIGIN = window.GGG_API_ORIGIN ? String(window.GGG_API_ORIGIN).replace(/\/$/, '') : '';
-function apiUrl(path) { return (API_ORIGIN ? API_ORIGIN : '') + path; }
+const API_ORIGIN = window.GGG_API_ORIGIN ? window.GGG_API_ORIGIN.replace(/\/$/, '') : '';
+function apiUrl(path) { return API_ORIGIN + path; }
 export async function login(username, password) {
     try {
         const res = await fetch(apiUrl('/api/login'), {
