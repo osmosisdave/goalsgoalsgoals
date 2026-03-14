@@ -22,6 +22,17 @@ jobs:
       - name: Build (TypeScript)
         run: npm run build
 
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Run server unit tests
+        run: npm test
+        working-directory: server
+
       - name: Inject frontend production config
         run: |
           if [ -z "$API_ORIGIN" ]; then

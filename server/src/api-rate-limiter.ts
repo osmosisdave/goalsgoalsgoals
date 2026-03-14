@@ -57,7 +57,7 @@ interface Analytics {
   };
 }
 
-class ApiRateLimiter {
+export class ApiRateLimiter {
   private data: ApiCallsData | null = null;
   private mongoCollection: Collection<ApiCallsData> | null = null;
 
