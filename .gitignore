@@ -45,6 +45,8 @@ server/api-calls.json
 server/leagues.json
 admin.token
 *.token
+server/google-credentials.json
+server/oauth-client.json
 
 # TypeScript
 *.tsbuildinfo

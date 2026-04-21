@@ -38,6 +38,8 @@ Goals Goals Goals is a football league management web app. It shows fixtures, st
 
 ## Running & Building
 
+> **Security:** Always use `--ignore-scripts` with `npm install` to prevent postinstall script execution.
+
 ```bash
 # Start both servers (file storage)
 ./start.sh
@@ -66,6 +68,8 @@ tail -f logs/frontend.log
 - **Migrate JS to TS opportunistically** — when touching an existing `assets/js/` file for another reason, consider moving the logic to `src/` as TypeScript if the change is non-trivial. Don't migrate files you aren't already editing.
 - **Type API responses** — define interfaces for any data fetched from the backend. Avoid `any`.
 - **No new dependencies** without a clear reason and explicit approval.
+- **Pin exact versions** for all dependencies in `package.json` — never use ranges (`^`, `~`, `*`). This prevents accidentally pulling in a malicious or breaking version on the next install.
+- **Always use `--ignore-scripts`** when running `npm install` (e.g. `npm install --ignore-scripts`). This prevents malicious postinstall scripts from executing.
 - **Don't rename** public API endpoints, JSON fields, JWT payload keys, or HTML element IDs without checking every caller first.
 - **Both storage modes must work** — changes to data access must support both JSON-file and MongoDB paths.
 - **Guard all env vars** — always provide a safe fallback (e.g. `process.env.X || 'default'`).
@@ -98,6 +102,19 @@ server/users.json            ← User store (file mode)
 server/leagues.json          ← League/fixture store (file mode)
 server/api-calls.json        ← Rate limiter call log (file mode)
 ```
+
+---
+
+## Banned Packages — Security
+
+These packages are known malware and must **never** be installed under any circumstances:
+
+| Package | Version | Reason |
+|---|---|---|
+| `axios` | `1.14.1` | Contains malware — installs malicious code on the machine |
+| `plain-crypto-js` | `4.2.1` | Contains malware — installs malicious code on the machine |
+
+If either of these is ever found in `package.json` or `package-lock.json`, remove them immediately and do not run `npm install` until they are gone.
 
 ---
 
