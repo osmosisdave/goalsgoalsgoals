@@ -176,7 +176,7 @@ The free tier typically allows:
 
 Your system has mock data for testing. You can view existing fixtures:
 
-http://localhost:8000/matches.html
+http://localhost:8000/fixtures.html
 
 ### Test the Endpoint Directly
 
@@ -256,7 +256,7 @@ This means you can:
 1. **Add your API key** to server/.env
 2. **Restart the server** if it's running
 3. **Click the sync button** in the admin UI
-4. **View your fixtures** at http://localhost:8000/matches.html
+4. **View your fixtures** at http://localhost:8000/fixtures.html
 
 ## 📚 More Information
 

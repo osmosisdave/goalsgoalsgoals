@@ -758,6 +758,105 @@ app.get('/api/football/fixtures', async (req: Request, res: Response) => {
   }
 });
 
+// Get fixtures grouped into gameweeks using UK local time rules:
+//   - Saturday: 15:00 local kickoffs only
+//   - Any other day: 19:00–20:00 local kickoffs only
+//   - Only date-groups with >= 30 qualifying fixtures become a gameweek
+//   - Gameweeks are numbered sequentially by date (GW1, GW2, …)
+app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const season = req.query.season ? parseInt(req.query.season as string) : 2025;
+    const db = mongoClient.db('goalsgoalsgoals');
+
+    const fixtures = await db.collection('fixtures')
+      .find({ 'league.season': season })
+      .sort({ 'fixture.date': 1 })
+      .toArray();
+
+    // Convert a UTC ISO date string to UK local time components.
+    // UK uses GMT (UTC+0) in winter and BST (UTC+1) in summer.
+    // We use Intl to resolve this correctly without a tz library.
+    function toUKParts(isoDate: string): { dayOfWeek: number; hour: number; dateStr: string } {
+      const d = new Date(isoDate);
+
+      const ukFormatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        weekday: 'short',
+      });
+
+      const parts = ukFormatter.formatToParts(d);
+      const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+
+      const weekdayMap: Record<string, number> = {
+        Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0,
+      };
+      const dayOfWeek = weekdayMap[get('weekday')] ?? -1;
+      const hour = parseInt(get('hour'), 10);
+      const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
+
+      return { dayOfWeek, hour, dateStr };
+    }
+
+    // Group qualifying fixtures by UK local date
+    const byDate: Record<string, any[]> = {};
+
+    for (const fixture of fixtures) {
+      const isoDate = fixture?.fixture?.date;
+      if (!isoDate) continue;
+
+      const { dayOfWeek, hour, dateStr } = toUKParts(isoDate);
+
+      const isSaturday = dayOfWeek === 6;
+      const qualifies = isSaturday
+        ? hour === 15                        // Saturday: 3pm only
+        : (hour === 19 || hour === 20);      // Other days: 19:00–20:00
+
+      if (!qualifies) continue;
+
+      if (!byDate[dateStr]) byDate[dateStr] = [];
+      byDate[dateStr].push(fixture);
+    }
+
+    // Keep only dates with >= 30 qualifying fixtures, sorted chronologically
+    const qualifyingDates = Object.entries(byDate)
+      .filter(([, fxs]) => fxs.length >= 30)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    // Build gameweek objects with sequential numbering
+    const gameweeks = qualifyingDates.map(([dateStr, fxs], idx) => {
+      const d = new Date(`${dateStr}T12:00:00Z`);
+      const label = `GW${idx + 1} (${d.toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        timeZone: 'Europe/London',
+      })})`;
+
+      return {
+        number: idx + 1,
+        label,
+        date: dateStr,
+        fixtures: fxs,
+      };
+    });
+
+    res.json({ gameweeks });
+  } catch (error: any) {
+    console.error('Error building gameweeks:', error);
+    res.status(500).json({ error: 'Failed to build gameweeks', message: error.message });
+  }
+});
+
 // Get standings from database
 app.get('/api/football/standings', async (req: Request, res: Response) => {
   try {

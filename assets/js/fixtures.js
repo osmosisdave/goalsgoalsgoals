@@ -1,11 +1,11 @@
 // Matches - Fetch fixtures from database
-// Compiled to assets/js/matches.js by `npm run build` (root tsconfig).
+// Compiled to assets/js/fixtures.js by `npm run build` (root tsconfig).
 // ----- IIFE to avoid polluting the global scope -----
 (function () {
     // API_BASE_URL comes from config.js via window.GGG_API_ORIGIN (typed in globals.d.ts).
     // Trailing slash stripped to keep URL construction consistent.
     const API_BASE_URL = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
-    let allFixtures = [];
+    let allGameweeks = [];
     let matchSelections = {};
     let currentUser = null;
     let selectedLeague = 'all';
@@ -99,20 +99,17 @@
         }
         return false;
     }
-    async function fetchFixtures() {
+    async function fetchGameweeks() {
         try {
-            console.log('Fetching fixtures from:', `${API_BASE_URL}/api/football/fixtures?season=${selectedSeason}`);
-            const response = await fetch(`${API_BASE_URL}/api/football/fixtures?season=${selectedSeason}`);
-            console.log('Response status:', response.status);
+            const response = await fetch(`${API_BASE_URL}/api/football/gameweeks?season=${selectedSeason}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             const data = await response.json();
-            console.log('Received fixtures:', data.results);
-            return data.response || [];
+            return data.gameweeks || [];
         }
         catch (error) {
-            console.error('Error fetching fixtures:', error);
+            console.error('Error fetching gameweeks:', error);
             const root = document.getElementById('matches-root');
             if (root) {
                 root.innerHTML = `
@@ -120,7 +117,7 @@
             <div class="card-content">
               <span class="card-title red-text">Error Loading Fixtures</span>
               <p><strong>Error:</strong> ${error.message}</p>
-              <p><strong>API URL:</strong> ${API_BASE_URL}/api/football/fixtures</p>
+              <p><strong>API URL:</strong> ${API_BASE_URL}/api/football/gameweeks</p>
               <p class="grey-text">Check the browser console for more details. Make sure the backend server is running on port 4000.</p>
             </div>
           </div>
@@ -296,7 +293,7 @@
                 // If user already has a selection for a different fixture, confirm the swap
                 const currentSelectionKey = Object.keys(matchSelections).find(fid => matchSelections[parseInt(fid)] === currentUser && parseInt(fid) !== fixtureId);
                 if (currentSelectionKey) {
-                    const selected = allFixtures.find(f => f.fixture.id === parseInt(currentSelectionKey));
+                    const selected = allGameweeks.flatMap((gw) => gw.fixtures).find((f) => f.fixture.id === parseInt(currentSelectionKey));
                     if (selected) {
                         const currentMatch = `${selected.teams.home.name} vs ${selected.teams.away.name}`;
                         const newMatch = `${fixture.teams.home.name} vs ${fixture.teams.away.name}`;
@@ -337,52 +334,38 @@
             seasonSelector.addEventListener('change', async (e) => {
                 selectedSeason = e.target.value;
                 root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
-                allFixtures = await fetchFixtures();
+                allGameweeks = await fetchGameweeks();
                 await fetchSelections();
                 if (window.renderPage)
                     window.renderPage();
             });
         }
-        [currentUser, allFixtures] = await Promise.all([
+        [currentUser, allGameweeks] = await Promise.all([
             fetchCurrentUser(),
-            fetchFixtures()
+            fetchGameweeks()
         ]);
         await fetchSelections();
-        if (allFixtures.length === 0) {
-            root.innerHTML = '<p class="grey-text">No fixtures available. Make sure the database is seeded.</p>';
+        if (allGameweeks.length === 0) {
+            root.innerHTML = '<p class="grey-text">No gameweeks available. Make sure the database is seeded and fixtures meet the qualifying criteria.</p>';
             return;
         }
         let currentTab = 0;
         window.renderPage = function () {
             var _a;
-            let filteredFixtures = allFixtures;
-            if (selectedLeague !== 'all') {
-                filteredFixtures = filteredFixtures.filter(f => f.league.id === parseInt(selectedLeague));
-            }
-            if (selectedTeam !== 'all') {
-                filteredFixtures = filteredFixtures.filter(f => f.teams.home.id === parseInt(selectedTeam) || f.teams.away.id === parseInt(selectedTeam));
-            }
-            // Group fixtures by round number extracted from "Regular Season - N"
-            const fixturesByRound = {};
-            filteredFixtures.forEach(f => {
-                var _a;
-                const roundMatch = (_a = f.league.round) === null || _a === void 0 ? void 0 : _a.match(/(\d+)$/);
-                const roundNum = roundMatch ? parseInt(roundMatch[1]) : 1;
-                if (!fixturesByRound[roundNum]) {
-                    fixturesByRound[roundNum] = { fixtures: [], dates: new Set() };
+            // Build the flat fixture list for filter dropdowns (all fixtures across all gameweeks)
+            const allFixtures = allGameweeks.flatMap(gw => gw.fixtures);
+            // Apply league/team filters to each gameweek's fixture list
+            const tabs = allGameweeks.map(gw => {
+                let fixtures = gw.fixtures;
+                if (selectedLeague !== 'all') {
+                    fixtures = fixtures.filter(f => f.league.id === parseInt(selectedLeague));
                 }
-                fixturesByRound[roundNum].fixtures.push(f);
-                fixturesByRound[roundNum].dates.add(new Date(f.fixture.date).toISOString().split('T')[0]);
-            });
-            const sortedRounds = Object.keys(fixturesByRound).map(Number).sort((a, b) => a - b);
-            const tabs = sortedRounds.map(roundNum => {
-                const roundData = fixturesByRound[roundNum];
-                const dates = Array.from(roundData.dates).sort();
-                const dateRange = dates.length > 1
-                    ? `${new Date(dates[0]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${new Date(dates[dates.length - 1]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-                    : new Date(dates[0]).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-                return { label: `GW ${roundNum}`, fullLabel: dateRange, fixtures: roundData.fixtures, icon: 'event' };
-            });
+                if (selectedTeam !== 'all') {
+                    fixtures = fixtures.filter(f => f.teams.home.id === parseInt(selectedTeam) || f.teams.away.id === parseInt(selectedTeam));
+                }
+                return { label: gw.label, date: gw.date, fixtures };
+            }).filter(gw => gw.fixtures.length > 0);
+            const filteredTotal = tabs.reduce((sum, gw) => sum + gw.fixtures.length, 0);
             root.innerHTML = '';
             // Filters card
             const filtersCard = document.createElement('div');
@@ -459,7 +442,7 @@
                 const infoDiv = document.createElement('div');
                 infoDiv.className = 'center-align';
                 infoDiv.style.marginBottom = '10px';
-                infoDiv.innerHTML = `<span class="grey-text">Total Gameweeks: <strong>${tabs.length}</strong> | Total Fixtures: <strong>${filteredFixtures.length}</strong></span>`;
+                infoDiv.innerHTML = `<span class="grey-text">Total Gameweeks: <strong>${tabs.length}</strong> | Total Fixtures: <strong>${filteredTotal}</strong></span>`;
                 root.appendChild(infoDiv);
             }
             // Scrollable tab navigation
@@ -475,8 +458,8 @@
                 const a = document.createElement('a');
                 a.href = '#';
                 a.className = idx === currentTab ? 'active' : '';
-                a.innerHTML = `<i class="material-icons left" style="font-size:18px;">${tab.icon}</i>${tab.label} (${tab.fixtures.length})`;
-                a.title = tab.fullLabel;
+                a.innerHTML = `<i class="material-icons left" style="font-size:18px;">event</i>${tab.label} (${tab.fixtures.length})`;
+                a.title = tab.date;
                 a.addEventListener('click', (e) => {
                     e.preventDefault();
                     currentTab = idx;
@@ -506,7 +489,7 @@
                 const dateHeader = document.createElement('h5');
                 dateHeader.className = 'center-align grey-text text-darken-2';
                 dateHeader.style.marginBottom = '20px';
-                dateHeader.textContent = currentTabData.fullLabel;
+                dateHeader.textContent = currentTabData.label;
                 tabContent.appendChild(dateHeader);
             }
             if (currentFixtures.length === 0) {

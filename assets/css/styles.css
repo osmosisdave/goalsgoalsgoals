@@ -20,7 +20,7 @@ nav a:hover{background-color:rgba(255,255,255,0.15)}
 
 /* Logo styling */
 .brand-logo{font-weight:700;display:flex !important;align-items:center;gap:8px}
-.brand-logo img{height:40px;width:40px;vertical-align:middle}
+.brand-logo img{height:52px;width:auto;vertical-align:middle}
 
 /* Small helpers */
 .hero{padding:3.5rem 1rem;background:linear-gradient(135deg, var(--primary-light) 0%, var(--accent) 100%)}

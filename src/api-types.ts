@@ -156,6 +156,19 @@ export interface FixturesDbResponse {
   response: Fixture[];
 }
 
+// ----- GET /api/football/gameweeks -----
+
+export interface Gameweek {
+  number: number;
+  label: string;     // e.g. "GW1 (Sat 12 Apr)"
+  date: string;      // ISO date string "YYYY-MM-DD" (UK local date)
+  fixtures: Fixture[];
+}
+
+export interface GameweeksResponse {
+  gameweeks: Gameweek[];
+}
+
 // ----- GET /api/matches/selections -----
 
 export interface SelectionRecord {
