@@ -404,13 +404,10 @@ import type {
       return;
     }
 
-    // Default to the gameweek closest to today: the last one whose date <= today,
-    // or GW1 if all dates are in the future.
-    const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-    let currentTab = 0;
-    for (let i = 0; i < allGameweeks.length; i++) {
-      if (allGameweeks[i].date <= today) currentTab = i;
-    }
+    // Default to the last unlocked gameweek — that's the one currently open for
+    // selection. Fall back to GW1 if everything is somehow locked.
+    const lastUnlocked = allGameweeks.reduce((best, gw, i) => !gw.isLocked ? i : best, 0);
+    let currentTab = lastUnlocked;
 
     window.renderPage = function () {
       // Build the flat fixture list for filter dropdowns (all fixtures across all gameweeks)
