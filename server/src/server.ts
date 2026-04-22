@@ -769,7 +769,10 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const season = req.query.season ? parseInt(req.query.season as string) : 2025;
+    // Football seasons run Aug–May; season year = start year of the season.
+    const nowYear = new Date();
+    const currentSeason = nowYear.getMonth() >= 7 ? nowYear.getFullYear() : nowYear.getFullYear() - 1;
+    const season = req.query.season ? parseInt(req.query.season as string) : currentSeason;
     const db = mongoClient.db('goalsgoalsgoals');
 
     const fixtures = await db.collection('fixtures')
