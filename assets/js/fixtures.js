@@ -376,7 +376,6 @@
                 }
                 return { label: gw.label, date: gw.date, fixtures, isLocked: gw.isLocked, unlocksAt: gw.unlocksAt };
             }).filter(gw => gw.fixtures.length > 0);
-            const filteredTotal = tabs.reduce((sum, gw) => sum + gw.fixtures.length, 0);
             root.innerHTML = '';
             // Filters card
             const filtersCard = document.createElement('div');
@@ -449,62 +448,91 @@
             filtersContent.appendChild(filtersRow);
             filtersCard.appendChild(filtersContent);
             root.appendChild(filtersCard);
-            if (tabs.length > 0) {
-                const infoDiv = document.createElement('div');
-                infoDiv.className = 'center-align';
-                infoDiv.style.marginBottom = '10px';
-                infoDiv.innerHTML = `<span class="grey-text">Total Gameweeks: <strong>${tabs.length}</strong> | Total Fixtures: <strong>${filteredTotal}</strong></span>`;
-                root.appendChild(infoDiv);
-            }
-            // Scrollable tab navigation
-            const tabsContainer = document.createElement('div');
-            tabsContainer.style.cssText = 'overflow-x:auto;white-space:nowrap;border-bottom:1px solid #e0e0e0;';
-            const tabNav = document.createElement('ul');
-            tabNav.className = 'tabs';
-            tabNav.style.cssText = 'display:flex;flex-wrap:nowrap;';
-            tabs.forEach((tab, idx) => {
-                const li = document.createElement('li');
-                li.className = 'tab';
-                li.style.flexShrink = '0';
-                const a = document.createElement('a');
-                a.href = '#';
-                a.className = idx === currentTab ? 'active' : '';
-                const lockIcon = tab.isLocked ? '<i class="material-icons left" style="font-size:18px;">lock</i>' : '<i class="material-icons left" style="font-size:18px;">event</i>';
-                a.innerHTML = `${lockIcon}${tab.label} (${tab.fixtures.length})`;
-                a.title = tab.isLocked && tab.unlocksAt
-                    ? `Locked — opens ${new Date(tab.unlocksAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}`
-                    : tab.date;
-                a.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    currentTab = idx;
+            // ── Gameweek navigator ───────────────────────────────────────────────────
+            // Clamp currentTab in case the tabs array shrank (e.g. filters applied)
+            if (currentTab >= tabs.length)
+                currentTab = Math.max(0, tabs.length - 1);
+            const nav = document.createElement('div');
+            nav.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;';
+            // Prev button
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'btn waves-effect waves-light blue';
+            prevBtn.style.cssText = 'padding:0 12px;min-width:40px;flex-shrink:0;';
+            prevBtn.innerHTML = '<i class="material-icons">chevron_left</i>';
+            prevBtn.disabled = currentTab === 0;
+            prevBtn.title = currentTab > 0 ? tabs[currentTab - 1].label : '';
+            prevBtn.addEventListener('click', () => {
+                if (currentTab > 0) {
+                    currentTab--;
                     if (window.renderPage)
                         window.renderPage();
-                    setTimeout(() => {
-                        var _a;
-                        (_a = a.parentElement) === null || _a === void 0 ? void 0 : _a.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                    }, 100);
-                });
-                li.appendChild(a);
-                tabNav.appendChild(li);
+                }
             });
-            tabsContainer.appendChild(tabNav);
-            root.appendChild(tabsContainer);
-            M.Tabs.init(tabNav);
-            setTimeout(() => {
-                var _a;
-                (_a = tabNav.querySelector(`.tab:nth-child(${currentTab + 1})`)) === null || _a === void 0 ? void 0 : _a.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            }, 100);
-            // Tab content
+            // Dropdown — shows all gameweeks, locks indicated
+            const gwSelect = document.createElement('select');
+            gwSelect.className = 'browser-default';
+            gwSelect.style.cssText = 'flex:1;min-width:160px;max-width:360px;height:36px;margin:0;';
+            tabs.forEach((tab, idx) => {
+                const opt = document.createElement('option');
+                opt.value = String(idx);
+                opt.selected = idx === currentTab;
+                const lockMark = tab.isLocked ? ' 🔒' : '';
+                opt.textContent = `${tab.label} (${tab.fixtures.length} fixtures)${lockMark}`;
+                gwSelect.appendChild(opt);
+            });
+            gwSelect.addEventListener('change', (e) => {
+                currentTab = parseInt(e.target.value, 10);
+                if (window.renderPage)
+                    window.renderPage();
+            });
+            // Next button
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn waves-effect waves-light blue';
+            nextBtn.style.cssText = 'padding:0 12px;min-width:40px;flex-shrink:0;';
+            nextBtn.innerHTML = '<i class="material-icons">chevron_right</i>';
+            nextBtn.disabled = currentTab === tabs.length - 1;
+            nextBtn.title = currentTab < tabs.length - 1 ? tabs[currentTab + 1].label : '';
+            nextBtn.addEventListener('click', () => {
+                if (currentTab < tabs.length - 1) {
+                    currentTab++;
+                    if (window.renderPage)
+                        window.renderPage();
+                }
+            });
+            // Summary label
+            const summarySpan = document.createElement('span');
+            summarySpan.className = 'grey-text';
+            summarySpan.style.cssText = 'font-size:13px;flex-shrink:0;margin-left:4px;';
+            summarySpan.innerHTML = `${currentTab + 1} of ${tabs.length}`;
+            nav.appendChild(prevBtn);
+            nav.appendChild(gwSelect);
+            nav.appendChild(nextBtn);
+            nav.appendChild(summarySpan);
+            root.appendChild(nav);
+            // ── Current gameweek content ─────────────────────────────────────────────
             const tabContent = document.createElement('div');
-            tabContent.style.marginTop = '20px';
             const currentTabData = tabs[currentTab];
             const currentFixtures = (_a = currentTabData === null || currentTabData === void 0 ? void 0 : currentTabData.fixtures) !== null && _a !== void 0 ? _a : [];
             if (currentTabData) {
+                // Header row: gameweek label + lock badge if locked
+                const gwHeader = document.createElement('div');
+                gwHeader.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;';
                 const dateHeader = document.createElement('h5');
-                dateHeader.className = 'center-align grey-text text-darken-2';
-                dateHeader.style.marginBottom = '20px';
+                dateHeader.className = 'grey-text text-darken-2';
+                dateHeader.style.margin = '0';
                 dateHeader.textContent = currentTabData.label;
-                tabContent.appendChild(dateHeader);
+                gwHeader.appendChild(dateHeader);
+                if (currentTabData.isLocked && currentTabData.unlocksAt) {
+                    const lockLabel = new Date(currentTabData.unlocksAt).toLocaleString('en-GB', {
+                        weekday: 'short', day: 'numeric', month: 'short',
+                        hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
+                    });
+                    const lockBadge = document.createElement('span');
+                    lockBadge.style.cssText = 'padding:4px 10px;border-radius:12px;font-size:12px;font-weight:bold;background:#9e9e9e;color:white;display:inline-flex;align-items:center;gap:4px;';
+                    lockBadge.innerHTML = `<i class="material-icons" style="font-size:14px;">lock</i> Opens ${lockLabel} UTC`;
+                    gwHeader.appendChild(lockBadge);
+                }
+                tabContent.appendChild(gwHeader);
             }
             if (currentFixtures.length === 0) {
                 const empty = document.createElement('p');
@@ -520,8 +548,6 @@
                 tabContent.appendChild(collection);
             }
             root.appendChild(tabContent);
-            // Re-init tabs after DOM update so Materialize picks up the active state
-            M.Tabs.init(tabNav);
         };
         window.renderPage();
     });
