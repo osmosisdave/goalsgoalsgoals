@@ -38,53 +38,94 @@ async function seedMockMatchSelections() {
       return;
     }
     
-    // Get fixtures grouped by round (gameweek) for season 2025
-    const fixturesByRound = {};
-    const fixtures = await fixturesCollection.find({ 
-      'league.season': 2025 
-    }).toArray();
-    
+    // Build gameweeks using the same qualifying rules as the /api/football/gameweeks endpoint:
+    //   - Saturday: 15:00 UK local kickoffs only
+    //   - Other days: 19:00–20:00 UK local kickoffs only
+    //   - Only date-groups with >= 30 qualifying fixtures become a gameweek
+    // Then restrict to gameweeks that are currently unlocked:
+    //   - GW1 is always unlocked
+    //   - GWN unlocks at 10:00 UTC the day after GW(N-1)'s date
+    const fixtures = await fixturesCollection.find({
+      'league.season': 2025
+    }).sort({ 'fixture.date': 1 }).toArray();
+
     console.log(`Found ${fixtures.length} fixtures for 2025 season`);
-    
-    fixtures.forEach(f => {
-      const roundMatch = f.league.round?.match(/(\d+)$/);
-      const roundNum = roundMatch ? parseInt(roundMatch[1]) : 1;
-      
-      if (!fixturesByRound[roundNum]) {
-        fixturesByRound[roundNum] = [];
-      }
-      fixturesByRound[roundNum].push(f);
-    });
-    
-    const rounds = Object.keys(fixturesByRound).map(Number).sort((a, b) => a - b);
-    console.log(`Found ${rounds.length} gameweeks`);
-    
-    if (rounds.length < 20) {
-      console.warn(`Warning: Only ${rounds.length} gameweeks available, need at least 20`);
+
+    function toUKParts(isoDate) {
+      const d = new Date(isoDate);
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        weekday: 'short',
+      });
+      const parts = fmt.formatToParts(d);
+      const get = (type) => parts.find(p => p.type === type)?.value ?? '';
+      const weekdayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+      return {
+        dayOfWeek: weekdayMap[get('weekday')] ?? -1,
+        hour: parseInt(get('hour'), 10),
+        dateStr: `${get('year')}-${get('month')}-${get('day')}`,
+      };
     }
-    
+
+    const byDate = {};
+    for (const f of fixtures) {
+      const isoDate = f?.fixture?.date;
+      if (!isoDate) continue;
+      const { dayOfWeek, hour, dateStr } = toUKParts(isoDate);
+      const qualifies = dayOfWeek === 6 ? hour === 15 : (hour === 19 || hour === 20);
+      if (!qualifies) continue;
+      if (!byDate[dateStr]) byDate[dateStr] = [];
+      byDate[dateStr].push(f);
+    }
+
+    const qualifyingDates = Object.entries(byDate)
+      .filter(([, fxs]) => fxs.length >= 30)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    const now = new Date();
+
+    // Build gameweeks, keeping only those that are currently unlocked
+    const gameweeks = qualifyingDates
+      .map(([dateStr, fxs], idx) => {
+        let isLocked = false;
+        if (idx > 0) {
+          const prevDate = qualifyingDates[idx - 1][0];
+          const unlockDate = new Date(`${prevDate}T10:00:00Z`);
+          unlockDate.setUTCDate(unlockDate.getUTCDate() + 1);
+          isLocked = now < unlockDate;
+        }
+        return { number: idx + 1, dateStr, fixtures: fxs, isLocked };
+      })
+      .filter(gw => !gw.isLocked);
+
+    console.log(`Found ${qualifyingDates.length} total gameweeks, ${gameweeks.length} currently unlocked`);
+
+    if (gameweeks.length === 0) {
+      console.log('No unlocked gameweeks available yet.');
+      return;
+    }
+
     // Delete existing match selections
     console.log('\nDeleting existing match selections...');
     const deleteResult = await matchSelectionsCollection.deleteMany({});
     console.log(`Deleted ${deleteResult.deletedCount} existing selections`);
-    
+
     let totalSelections = 0;
-    
-    // For each user, select one random fixture per gameweek (first 20 gameweeks)
+
+    // For each user, select one random fixture per unlocked gameweek
     for (const user of users) {
       console.log(`\nProcessing user: ${user.username}`);
       const selections = [];
+
+      const gameweeksToSelect = gameweeks;
       
-      // Select one fixture from each of the first 20 gameweeks
-      const gameweeksToSelect = rounds.slice(0, 20);
-      
-      for (const roundNum of gameweeksToSelect) {
-        const roundFixtures = fixturesByRound[roundNum];
-        
-        if (roundFixtures && roundFixtures.length > 0) {
+      for (const gw of gameweeksToSelect) {
+        if (gw.fixtures.length > 0) {
           // Pick a random fixture from this gameweek
-          const randomFixture = roundFixtures[Math.floor(Math.random() * roundFixtures.length)];
-          
+          const randomFixture = gw.fixtures[Math.floor(Math.random() * gw.fixtures.length)];
+
           selections.push({
             username: user.username,
             fixtureId: randomFixture.fixture.id,
@@ -108,7 +149,7 @@ async function seedMockMatchSelections() {
       }
     }
     
-    console.log(`\n✓ Successfully created ${totalSelections} total match selections`);
+    console.log(`\n✓ Successfully created ${totalSelections} total match selections across ${gameweeks.length} unlocked gameweeks`);
     console.log(`✓ ${totalSelections / users.length} selections per user on average`);
     
     // Verify the count
