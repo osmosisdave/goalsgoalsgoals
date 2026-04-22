@@ -185,7 +185,7 @@ import type {
     });
   }
 
-  function renderFixture(fixture: Fixture): HTMLDivElement {
+  function renderFixture(fixture: Fixture, isLocked: boolean, unlocksAt: string | null): HTMLDivElement {
     const item = document.createElement('div');
     item.className = 'collection-item';
 
@@ -312,39 +312,49 @@ import type {
         selectionArea.appendChild(badge);
       }
     } else if (isUpcoming && currentUser) {
-      const selectBtn = document.createElement('button');
-      selectBtn.className = 'btn-small blue waves-effect';
-      selectBtn.style.cssText = 'padding:0 12px;height:28px;line-height:28px;';
-      selectBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">add_circle</i>Select';
-      selectBtn.onclick = async (e: MouseEvent) => {
-        e.stopPropagation();
+      if (isLocked) {
+        const lockBadge = document.createElement('span');
+        lockBadge.style.cssText = 'padding:6px 12px;border-radius:12px;font-size:12px;font-weight:bold;display:inline-flex;align-items:center;gap:4px;background:#9e9e9e;color:white;';
+        const unlockLabel = unlocksAt
+          ? new Date(unlocksAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+          : '';
+        lockBadge.innerHTML = `<i class="material-icons" style="font-size:16px;">lock</i> Locked${unlockLabel ? ` — opens ${unlockLabel}` : ''}`;
+        selectionArea.appendChild(lockBadge);
+      } else {
+        const selectBtn = document.createElement('button');
+        selectBtn.className = 'btn-small blue waves-effect';
+        selectBtn.style.cssText = 'padding:0 12px;height:28px;line-height:28px;';
+        selectBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">add_circle</i>Select';
+        selectBtn.onclick = async (e: MouseEvent) => {
+          e.stopPropagation();
 
-        // If user already has a selection for a different fixture, confirm the swap
-        const currentSelectionKey = Object.keys(matchSelections).find(
-          fid => matchSelections[parseInt(fid)] === currentUser && parseInt(fid) !== fixtureId
-        );
-        if (currentSelectionKey) {
-          const selected = allGameweeks.flatMap((gw: Gameweek) => gw.fixtures).find((f: Fixture) => f.fixture.id === parseInt(currentSelectionKey));
-          if (selected) {
-            const currentMatch = `${selected.teams.home.name} vs ${selected.teams.away.name}`;
-            const newMatch = `${fixture.teams.home.name} vs ${fixture.teams.away.name}`;
-            const confirmed = confirm(
-              `You have already selected:\n${currentMatch}\n\nDo you want to change your selection to:\n${newMatch}?`
-            );
-            if (!confirmed) return;
+          // If user already has a selection for a different fixture, confirm the swap
+          const currentSelectionKey = Object.keys(matchSelections).find(
+            fid => matchSelections[parseInt(fid)] === currentUser && parseInt(fid) !== fixtureId
+          );
+          if (currentSelectionKey) {
+            const selected = allGameweeks.flatMap((gw: Gameweek) => gw.fixtures).find((f: Fixture) => f.fixture.id === parseInt(currentSelectionKey));
+            if (selected) {
+              const currentMatch = `${selected.teams.home.name} vs ${selected.teams.away.name}`;
+              const newMatch = `${fixture.teams.home.name} vs ${fixture.teams.away.name}`;
+              const confirmed = confirm(
+                `You have already selected:\n${currentMatch}\n\nDo you want to change your selection to:\n${newMatch}?`
+              );
+              if (!confirmed) return;
+            }
           }
-        }
 
-        selectBtn.disabled = true;
-        selectBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">hourglass_empty</i>Selecting...';
-        if (await selectMatch(fixtureId)) {
-          if (window.renderPage) window.renderPage();
-        } else {
-          selectBtn.disabled = false;
-          selectBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">add_circle</i>Select';
-        }
-      };
-      selectionArea.appendChild(selectBtn);
+          selectBtn.disabled = true;
+          selectBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">hourglass_empty</i>Selecting...';
+          if (await selectMatch(fixtureId)) {
+            if (window.renderPage) window.renderPage();
+          } else {
+            selectBtn.disabled = false;
+            selectBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">add_circle</i>Select';
+          }
+        };
+        selectionArea.appendChild(selectBtn);
+      }
     }
 
     footer.appendChild(datetimeVenue);
@@ -405,7 +415,7 @@ import type {
             f.teams.home.id === parseInt(selectedTeam) || f.teams.away.id === parseInt(selectedTeam)
           );
         }
-        return { label: gw.label, date: gw.date, fixtures };
+        return { label: gw.label, date: gw.date, fixtures, isLocked: gw.isLocked, unlocksAt: gw.unlocksAt };
       }).filter(gw => gw.fixtures.length > 0);
 
       const filteredTotal = tabs.reduce((sum, gw) => sum + gw.fixtures.length, 0);
@@ -523,8 +533,11 @@ import type {
         const a = document.createElement('a');
         a.href = '#';
         a.className = idx === currentTab ? 'active' : '';
-        a.innerHTML = `<i class="material-icons left" style="font-size:18px;">event</i>${tab.label} (${tab.fixtures.length})`;
-        a.title = tab.date;
+        const lockIcon = tab.isLocked ? '<i class="material-icons left" style="font-size:18px;">lock</i>' : '<i class="material-icons left" style="font-size:18px;">event</i>';
+        a.innerHTML = `${lockIcon}${tab.label} (${tab.fixtures.length})`;
+        a.title = tab.isLocked && tab.unlocksAt
+          ? `Locked — opens ${new Date(tab.unlocksAt).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}`
+          : tab.date;
         a.addEventListener('click', (e: Event) => {
           e.preventDefault();
           currentTab = idx;
@@ -570,7 +583,7 @@ import type {
       } else {
         const collection = document.createElement('div');
         collection.className = 'collection';
-        currentFixtures.forEach(fixture => collection.appendChild(renderFixture(fixture)));
+        currentFixtures.forEach(fixture => collection.appendChild(renderFixture(fixture, currentTabData.isLocked, currentTabData.unlocksAt)));
         tabContent.appendChild(collection);
       }
 
