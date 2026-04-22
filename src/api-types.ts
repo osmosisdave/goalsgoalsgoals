@@ -162,6 +162,8 @@ export interface Gameweek {
   number: number;
   label: string;     // e.g. "GW1 (Sat 12 Apr)"
   date: string;      // ISO date string "YYYY-MM-DD" (UK local date)
+  isLocked: boolean; // true if selection is not yet open
+  unlocksAt: string | null; // ISO UTC datetime when selection opens (null for GW1)
   fixtures: Fixture[];
 }
 

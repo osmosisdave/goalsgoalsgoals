@@ -833,6 +833,7 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
       .sort(([a], [b]) => a.localeCompare(b));
 
     // Build gameweek objects with sequential numbering
+    const now = new Date();
     const gameweeks = qualifyingDates.map(([dateStr, fxs], idx) => {
       const d = new Date(`${dateStr}T12:00:00Z`);
       const label = `GW${idx + 1} (${d.toLocaleDateString('en-GB', {
@@ -842,10 +843,24 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
         timeZone: 'Europe/London',
       })})`;
 
+      // GW1 is always open. GWN (N > 1) unlocks at 10:00 UTC the day after the
+      // previous gameweek's date.
+      let isLocked = false;
+      let unlocksAt: string | null = null;
+      if (idx > 0) {
+        const prevDate = qualifyingDates[idx - 1][0]; // "YYYY-MM-DD"
+        const unlockDate = new Date(`${prevDate}T10:00:00Z`);
+        unlockDate.setUTCDate(unlockDate.getUTCDate() + 1);
+        unlocksAt = unlockDate.toISOString();
+        isLocked = now < unlockDate;
+      }
+
       return {
         number: idx + 1,
         label,
         date: dateStr,
+        isLocked,
+        unlocksAt,
         fixtures: fxs,
       };
     });
