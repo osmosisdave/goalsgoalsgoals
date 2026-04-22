@@ -10,7 +10,11 @@
     let currentUser = null;
     let selectedLeague = 'all';
     let selectedTeam = 'all';
-    let selectedSeason = '2025';
+    // Football seasons run Aug–May. The season is identified by the year it starts,
+    // so 2024/25 = 2024, 2025/26 = 2025. August = month index 7.
+    const _now = new Date();
+    const _currentSeason = String(_now.getMonth() >= 7 ? _now.getFullYear() : _now.getFullYear() - 1);
+    let selectedSeason = _currentSeason;
     function getToken() {
         return sessionStorage.getItem('ggg_token');
     }
@@ -341,6 +345,8 @@
         root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
         const seasonSelector = document.getElementById('season-selector');
         if (seasonSelector) {
+            // Sync the dropdown to whichever season was computed as current
+            seasonSelector.value = selectedSeason;
             M.FormSelect.init(seasonSelector);
             seasonSelector.addEventListener('change', async (e) => {
                 selectedSeason = e.target.value;
@@ -360,7 +366,14 @@
             root.innerHTML = '<p class="grey-text">No gameweeks available. Make sure the database is seeded and fixtures meet the qualifying criteria.</p>';
             return;
         }
+        // Default to the gameweek closest to today: the last one whose date <= today,
+        // or GW1 if all dates are in the future.
+        const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
         let currentTab = 0;
+        for (let i = 0; i < allGameweeks.length; i++) {
+            if (allGameweeks[i].date <= today)
+                currentTab = i;
+        }
         window.renderPage = function () {
             var _a;
             // Build the flat fixture list for filter dropdowns (all fixtures across all gameweeks)
