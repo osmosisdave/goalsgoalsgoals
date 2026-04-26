@@ -8,6 +8,8 @@ import type {
   SelectionRecord,
   SelectionsResponse,
   SelectMatchResponse,
+  StealableResponse,
+  StealMatchResponse,
   MeResponse,
 } from './api-types';
 
@@ -20,6 +22,7 @@ import type {
 
   let allGameweeks: Gameweek[] = [];
   let matchSelections: Record<number, string> = {};
+  let stealableFixtureIds: Set<number> = new Set();
   let currentUser: string | null = null;
   let selectedLeague = 'all';
   let selectedTeam = 'all';
@@ -83,7 +86,7 @@ import type {
       if (response.ok) {
         const message = data.replaced ? '✓ Match selection updated!' : '✓ Match selected!';
         M.toast({ html: message, classes: 'green', displayLength: 3000 });
-        await fetchSelections();
+        await Promise.all([fetchSelections(), fetchStealable()]);
         return true;
       } else {
         M.toast({ html: data.message || 'Failed to select match', classes: 'red' });
@@ -106,7 +109,7 @@ import type {
       });
       if (response.ok) {
         M.toast({ html: 'Match unselected', classes: 'grey' });
-        await fetchSelections();
+        await Promise.all([fetchSelections(), fetchStealable()]);
         return true;
       }
     } catch (error) {
@@ -139,6 +142,45 @@ import type {
         `;
       }
       return [];
+    }
+  }
+
+  async function fetchStealable(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/matches/stealable?season=${selectedSeason}`);
+      if (response.ok) {
+        const data: StealableResponse = await response.json();
+        stealableFixtureIds = new Set(data.stealableFixtureIds);
+      }
+    } catch (error) {
+      console.error('Error fetching stealable picks:', error);
+    }
+  }
+
+  async function stealMatch(fixtureId: number): Promise<boolean> {
+    const token = getToken();
+    if (!token) {
+      M.toast({ html: 'Please log in to steal a match', classes: 'red' });
+      return false;
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/matches/${fixtureId}/steal`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const data: StealMatchResponse = await response.json();
+      if (response.ok) {
+        M.toast({ html: `🗡️ ${data.message}`, classes: 'red darken-2', displayLength: 4000 });
+        await Promise.all([fetchSelections(), fetchStealable()]);
+        return true;
+      } else {
+        M.toast({ html: (data as any).message || 'Failed to steal match', classes: 'red' });
+        return false;
+      }
+    } catch (error) {
+      console.error('Error stealing match:', error);
+      M.toast({ html: 'Error stealing match', classes: 'red' });
+      return false;
     }
   }
 
@@ -314,6 +356,33 @@ import type {
         badge.style.color = 'white';
         badge.innerHTML = `<i class="material-icons" style="font-size:16px;">person</i> Picked by ${selectedBy}`;
         selectionArea.appendChild(badge);
+
+        // Show steal button only when: the gameweek is active (not locked), the
+        // fixture hasn't started yet, the user is logged in, and the pick meets
+        // the consecutive-team steal criterion.
+        if (isUpcoming && !isLocked && currentUser && stealableFixtureIds.has(fixtureId)) {
+          const stealBtn = document.createElement('button');
+          stealBtn.className = 'btn-small red waves-effect';
+          stealBtn.style.cssText = 'margin-left:8px;padding:0 12px;height:28px;line-height:28px;font-weight:bold;';
+          stealBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">flash_on</i>Steal';
+          stealBtn.title = `${selectedBy} picked the same team two gameweeks in a row — you can steal this!`;
+          stealBtn.onclick = async (e: MouseEvent) => {
+            e.stopPropagation();
+            const confirmed = confirm(
+              `Steal ${fixture.teams.home.name} vs ${fixture.teams.away.name} from ${selectedBy}?\n\nTheir selection will be removed and the match will become yours.`
+            );
+            if (!confirmed) return;
+            stealBtn.disabled = true;
+            stealBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">hourglass_empty</i>Stealing...';
+            if (await stealMatch(fixtureId)) {
+              if (window.renderPage) window.renderPage();
+            } else {
+              stealBtn.disabled = false;
+              stealBtn.innerHTML = '<i class="material-icons left" style="font-size:16px;line-height:28px;">flash_on</i>Steal';
+            }
+          };
+          selectionArea.appendChild(stealBtn);
+        }
       }
     } else if (isUpcoming && currentUser) {
       if (isLocked) {
@@ -397,7 +466,7 @@ import type {
       fetchGameweeks()
     ]);
 
-    await fetchSelections();
+    await Promise.all([fetchSelections(), fetchStealable()]);
 
     if (allGameweeks.length === 0) {
       root.innerHTML = '<p class="grey-text">No gameweeks available. Make sure the database is seeded and fixtures meet the qualifying criteria.</p>';

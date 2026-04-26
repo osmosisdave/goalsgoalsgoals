@@ -79,6 +79,7 @@ async function connectMongo(): Promise<void> {
     await db.collection('fixtures').createIndex({ 'league.season': 1, 'fixture.date': 1 });
     await db.collection('match_selections').createIndex({ username: 1 });
     await db.collection('match_selections').createIndex({ date: 1 });
+    await db.collection('match_selection_history').createIndex({ username: 1, date: 1 });
     console.log('MongoDB indexes ensured');
   } catch (e: any) {
     console.error('Failed to connect to MongoDB — connection error details follow:');
@@ -770,6 +771,72 @@ app.get('/api/football/fixtures', async (req: Request, res: Response) => {
 //   - Any other day: 19:00–20:00 local kickoffs only
 //   - Only date-groups with >= 30 qualifying fixtures become a gameweek
 //   - Gameweeks are numbered sequentially by date (GW1, GW2, …)
+// ---------------------------------------------------------------------------
+// Shared gameweek helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the ordered list of qualifying GW date strings (YYYY-MM-DD, UK local)
+ * for the given season. A date qualifies when it has ≥30 fixtures that kick off
+ * at Saturday 15:00 UK or other days 19:00–20:00 UK.
+ */
+async function buildQualifyingDates(db: Db, season: number): Promise<string[]> {
+  const fixtures = await db.collection('fixtures')
+    .find({ 'league.season': season }, { projection: { 'fixture.date': 1, _id: 0 } })
+    .toArray();
+
+  const ukFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'short',
+  });
+  const weekdayMap: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+  const counts: Record<string, number> = {};
+
+  for (const f of fixtures) {
+    const isoDate = f?.fixture?.date;
+    if (!isoDate) continue;
+    const parts = ukFmt.formatToParts(new Date(isoDate));
+    const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
+    const dayOfWeek = weekdayMap[get('weekday')] ?? -1;
+    const hour = parseInt(get('hour'), 10);
+    const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
+    const isSat = dayOfWeek === 6;
+    const qualifies = isSat ? hour === 15 : (hour === 19 || hour === 20);
+    if (!qualifies) continue;
+    counts[dateStr] = (counts[dateStr] || 0) + 1;
+  }
+
+  return Object.entries(counts)
+    .filter(([, n]) => n >= 30)
+    .map(([d]) => d)
+    .sort();
+}
+
+/**
+ * Given an ordered list of qualifying GW dates, returns the current (last
+ * unlocked) GW date and the one immediately before it.
+ */
+function getCurrentAndPrevGWDates(dates: string[]): { currentDate: string | null; prevDate: string | null } {
+  if (dates.length === 0) return { currentDate: null, prevDate: null };
+  const now = new Date();
+  let currentIdx = -1;
+  for (let i = 0; i < dates.length; i++) {
+    let isLocked = false;
+    if (i > 0) {
+      const unlockDate = new Date(`${dates[i - 1]}T10:00:00Z`);
+      unlockDate.setUTCDate(unlockDate.getUTCDate() + 1);
+      isLocked = now < unlockDate;
+    }
+    if (!isLocked) currentIdx = i;
+  }
+  if (currentIdx === -1) return { currentDate: null, prevDate: null };
+  return {
+    currentDate: dates[currentIdx],
+    prevDate: currentIdx > 0 ? dates[currentIdx - 1] : null,
+  };
+}
+
 app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
   try {
     if (!mongoClient) {
@@ -1217,6 +1284,65 @@ app.get('/api/matches/selections', async (req: Request, res: Response) => {
   }
 });
 
+// Return the fixture IDs in the current gameweek whose holder picked the same
+// team in consecutive gameweeks (and are therefore stealable).
+app.get('/api/matches/stealable', async (req: Request, res: Response) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const nowYear = new Date();
+    const defaultSeason = nowYear.getMonth() >= 7 ? nowYear.getFullYear() : nowYear.getFullYear() - 1;
+    const season = req.query.season ? parseInt(req.query.season as string) : defaultSeason;
+    const db = mongoClient.db('goalsgoalsgoals');
+
+    const dates = await buildQualifyingDates(db, season);
+    const { currentDate, prevDate } = getCurrentAndPrevGWDates(dates);
+
+    if (!currentDate || !prevDate) {
+      return res.json({ stealableFixtureIds: [] });
+    }
+
+    // All selections in the current gameweek
+    const currentSelections = await db.collection('match_selections')
+      .find({ date: { $regex: `^${currentDate}` } })
+      .toArray();
+
+    if (currentSelections.length === 0) {
+      return res.json({ stealableFixtureIds: [] });
+    }
+
+    // Previous gameweek archived picks for the same users
+    const usernames = currentSelections.map((s: any) => s.username);
+    const prevSelections = await db.collection('match_selection_history')
+      .find({ username: { $in: usernames }, date: { $regex: `^${prevDate}` } })
+      .toArray();
+
+    // username → { home, away } of previous pick
+    const prevTeamsByUser: Record<string, { home: string; away: string }> = {};
+    for (const s of prevSelections) {
+      prevTeamsByUser[s.username] = { home: s.homeTeam, away: s.awayTeam };
+    }
+
+    // A pick is stealable when any team from the previous pick appears in the current pick
+    const stealableFixtureIds: number[] = [];
+    for (const s of currentSelections) {
+      const prev = prevTeamsByUser[s.username];
+      if (!prev) continue;
+      const prevTeams = new Set([prev.home, prev.away]);
+      if (prevTeams.has(s.homeTeam) || prevTeams.has(s.awayTeam)) {
+        stealableFixtureIds.push(s.fixtureId);
+      }
+    }
+
+    res.json({ stealableFixtureIds });
+  } catch (error: any) {
+    console.error('Error checking stealable picks:', error);
+    res.status(500).json({ error: 'Failed to check stealable picks', message: error.message });
+  }
+});
+
 // Unselect a match
 app.delete('/api/matches/:fixtureId/select', async (req: Request, res: Response) => {
   try {
@@ -1253,6 +1379,103 @@ app.delete('/api/matches/:fixtureId/select', async (req: Request, res: Response)
   } catch (error: any) {
     console.error('Error removing selection:', error);
     res.status(500).json({ error: 'Failed to remove selection', message: error.message });
+  }
+});
+
+// Steal another user's match selection for the current gameweek.
+// The target pick must meet the consecutive-team criterion: the victim picked
+// a team (home or away) that also appeared in their previous GW pick.
+app.post('/api/matches/:fixtureId/steal', async (req: Request, res: Response) => {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace(/^Bearer /i, '');
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Please log in to steal a match' });
+    }
+
+    const username = decoded.sub;
+    const fixtureId = parseInt(req.params.fixtureId as string);
+
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected', message: 'MongoDB is not available' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+
+    // The fixture must already be selected by someone else
+    const targetSelection = await db.collection('match_selections').findOne({ fixtureId });
+    if (!targetSelection) {
+      return res.status(404).json({ error: 'Not found', message: 'This fixture has no active selection' });
+    }
+    if (targetSelection.username === username) {
+      return res.status(400).json({ error: 'Bad request', message: 'You cannot steal your own selection' });
+    }
+
+    // Confirm we are in the current (unlocked) gameweek
+    const nowYear = new Date();
+    const defaultSeason = nowYear.getMonth() >= 7 ? nowYear.getFullYear() : nowYear.getFullYear() - 1;
+    const season: number = targetSelection.season || defaultSeason;
+    const dates = await buildQualifyingDates(db, season);
+    const { currentDate, prevDate } = getCurrentAndPrevGWDates(dates);
+
+    if (!currentDate) {
+      return res.status(400).json({ error: 'Bad request', message: 'No active gameweek' });
+    }
+    if (!targetSelection.date.startsWith(currentDate)) {
+      return res.status(400).json({ error: 'Bad request', message: 'Stealing is only allowed for the current gameweek' });
+    }
+    if (!prevDate) {
+      return res.status(400).json({ error: 'Bad request', message: 'No previous gameweek — steal not available for the first gameweek' });
+    }
+
+    // Verify the steal criterion: victim repeated a team vs their previous GW pick
+    const prevPick = await db.collection('match_selection_history').findOne({
+      username: targetSelection.username,
+      date: { $regex: `^${prevDate}` },
+    });
+    if (!prevPick) {
+      return res.status(400).json({ error: 'Bad request', message: 'Target pick does not meet steal criteria' });
+    }
+    const prevTeams = new Set([prevPick.homeTeam, prevPick.awayTeam]);
+    if (!prevTeams.has(targetSelection.homeTeam) && !prevTeams.has(targetSelection.awayTeam)) {
+      return res.status(400).json({ error: 'Bad request', message: 'Target pick does not meet steal criteria' });
+    }
+
+    // Silently drop the stealer's existing selection (if any)
+    await db.collection('match_selections').deleteOne({ username });
+
+    // Remove the victim's selection
+    await db.collection('match_selections').deleteOne({ fixtureId });
+
+    // Create the stealer's new selection, preserving all fixture meta from the original
+    await db.collection('match_selections').insertOne({
+      username,
+      fixtureId,
+      selectedAt: new Date(),
+      homeTeam: targetSelection.homeTeam,
+      awayTeam: targetSelection.awayTeam,
+      date: targetSelection.date,
+      leagueId: targetSelection.leagueId,
+      leagueName: targetSelection.leagueName,
+      round: targetSelection.round,
+      season: targetSelection.season,
+      status: targetSelection.status,
+    });
+
+    res.json({
+      success: true,
+      message: `Stolen from ${targetSelection.username}! ${targetSelection.homeTeam} vs ${targetSelection.awayTeam}`,
+      selection: {
+        fixtureId,
+        username,
+        homeTeam: targetSelection.homeTeam,
+        awayTeam: targetSelection.awayTeam,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error stealing match:', error);
+    res.status(500).json({ error: 'Failed to steal match', message: error.message });
   }
 });
 

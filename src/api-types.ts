@@ -230,6 +230,25 @@ export interface UnselectMatchResponse {
   message: string;
 }
 
+// ----- GET /api/matches/stealable -----
+
+export interface StealableResponse {
+  stealableFixtureIds: number[];
+}
+
+// ----- POST /api/matches/:fixtureId/steal -----
+
+export interface StealMatchResponse {
+  success: boolean;
+  message: string;
+  selection?: {
+    fixtureId: number;
+    username: string;
+    homeTeam: string;
+    awayTeam: string;
+  };
+}
+
 // ----- POST /api/matches/archive-finished -----
 
 export interface ArchiveFinishedResponse {
