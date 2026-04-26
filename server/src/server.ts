@@ -875,6 +875,113 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
   }
 });
 
+// Get the current gameweek (last unlocked) plus every user's selection for it.
+// Returns: { gameweek: { number, label, date }, players: [{ username, selection: MatchSelection | null }] }
+app.get('/api/gameweek/current', async (req: Request, res: Response) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const season = req.query.season ? parseInt(req.query.season as string) : (() => {
+      const n = new Date();
+      return n.getMonth() >= 7 ? n.getFullYear() : n.getFullYear() - 1;
+    })();
+
+    const db = mongoClient.db('goalsgoalsgoals');
+
+    // Re-use the same gameweek-building logic to find the current (last unlocked) gameweek
+    const fixtures = await db.collection('fixtures')
+      .find({ 'league.season': season })
+      .sort({ 'fixture.date': 1 })
+      .toArray();
+
+    function toUKDateStr(isoDate: string): { dayOfWeek: number; hour: number; dateStr: string } {
+      const d = new Date(isoDate);
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/London',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'short',
+      });
+      const parts = fmt.formatToParts(d);
+      const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+      const weekdayMap: Record<string, number> = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:0 };
+      return {
+        dayOfWeek: weekdayMap[get('weekday')] ?? -1,
+        hour: parseInt(get('hour'), 10),
+        dateStr: `${get('year')}-${get('month')}-${get('day')}`,
+      };
+    }
+
+    const byDate: Record<string, any[]> = {};
+    for (const f of fixtures) {
+      const isoDate = f?.fixture?.date;
+      if (!isoDate) continue;
+      const { dayOfWeek, hour, dateStr } = toUKDateStr(isoDate);
+      const qualifies = dayOfWeek === 6 ? hour === 15 : (hour === 19 || hour === 20);
+      if (!qualifies) continue;
+      if (!byDate[dateStr]) byDate[dateStr] = [];
+      byDate[dateStr].push(f);
+    }
+
+    const qualifyingDates = Object.entries(byDate)
+      .filter(([, fxs]) => fxs.length >= 30)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    const now = new Date();
+    let currentGW: { number: number; label: string; date: string } | null = null;
+
+    for (let idx = 0; idx < qualifyingDates.length; idx++) {
+      const [dateStr] = qualifyingDates[idx];
+      let isLocked = false;
+      if (idx > 0) {
+        const prevDate = qualifyingDates[idx - 1][0];
+        const unlockDate = new Date(`${prevDate}T10:00:00Z`);
+        unlockDate.setUTCDate(unlockDate.getUTCDate() + 1);
+        isLocked = now < unlockDate;
+      }
+      if (!isLocked) {
+        const d = new Date(`${dateStr}T12:00:00Z`);
+        currentGW = {
+          number: idx + 1,
+          label: `GW${idx + 1} (${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })})`,
+          date: dateStr,
+        };
+      }
+    }
+
+    if (!currentGW) {
+      return res.json({ gameweek: null, players: [] });
+    }
+
+    // Get all non-admin users
+    const users = await db.collection('users')
+      .find({ role: { $ne: 'admin' } }, { projection: { username: 1 } })
+      .sort({ username: 1 })
+      .toArray();
+
+    // Get all selections for the current gameweek date
+    const allSelections = await db.collection('match_selections')
+      .find({ date: { $regex: `^${currentGW.date}` } })
+      .toArray();
+
+    const selectionByUser: Record<string, any> = {};
+    for (const s of allSelections) {
+      selectionByUser[s.username] = s;
+    }
+
+    const players = users.map(u => ({
+      username: u.username,
+      selection: selectionByUser[u.username] ?? null,
+    }));
+
+    res.json({ gameweek: currentGW, players });
+  } catch (error: any) {
+    console.error('Error fetching current gameweek:', error);
+    res.status(500).json({ error: 'Failed to fetch current gameweek', message: error.message });
+  }
+});
+
 // Get standings from database
 app.get('/api/football/standings', async (req: Request, res: Response) => {
   try {
