@@ -1,4 +1,5 @@
 (function () {
+    const API_BASE_URL = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
     const root = document.getElementById('current-gameweek-root');
     if (!root)
         return;
