@@ -73,6 +73,13 @@ async function connectMongo(): Promise<void> {
     const db = mongoClient.db('goalsgoalsgoals');
     usersCollection = db.collection<User>('users');
     console.log('Connected to MongoDB - using database: goalsgoalsgoals');
+
+    // Ensure indexes exist for the most-queried fields.
+    // createIndex is idempotent — safe to call on every startup.
+    await db.collection('fixtures').createIndex({ 'league.season': 1, 'fixture.date': 1 });
+    await db.collection('match_selections').createIndex({ username: 1 });
+    await db.collection('match_selections').createIndex({ date: 1 });
+    console.log('MongoDB indexes ensured');
   } catch (e: any) {
     console.error('Failed to connect to MongoDB — connection error details follow:');
     console.error(e && e.stack ? e.stack : e);
@@ -775,40 +782,48 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
     const season = req.query.season ? parseInt(req.query.season as string) : currentSeason;
     const db = mongoClient.db('goalsgoalsgoals');
 
+    // Project only the fields the frontend actually renders — avoids sending ~5800
+    // full documents (logos, referee, halftime scores, etc.) over the wire.
+    const projection = {
+      'fixture.id': 1,
+      'fixture.date': 1,
+      'fixture.status.short': 1,
+      'fixture.venue.name': 1,
+      'league.id': 1,
+      'league.name': 1,
+      'league.round': 1,
+      'teams.home.id': 1,
+      'teams.home.name': 1,
+      'teams.home.winner': 1,
+      'teams.away.id': 1,
+      'teams.away.name': 1,
+      'teams.away.winner': 1,
+      'goals.home': 1,
+      'goals.away': 1,
+    };
+
     const fixtures = await db.collection('fixtures')
-      .find({ 'league.season': season })
+      .find({ 'league.season': season }, { projection })
       .sort({ 'fixture.date': 1 })
       .toArray();
 
     // Convert a UTC ISO date string to UK local time components.
     // UK uses GMT (UTC+0) in winter and BST (UTC+1) in summer.
     // We use Intl to resolve this correctly without a tz library.
-    function toUKParts(isoDate: string): { dayOfWeek: number; hour: number; dateStr: string } {
-      const d = new Date(isoDate);
-
-      const ukFormatter = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Europe/London',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        weekday: 'short',
-      });
-
-      const parts = ukFormatter.formatToParts(d);
-      const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
-
-      const weekdayMap: Record<string, number> = {
-        Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0,
-      };
-      const dayOfWeek = weekdayMap[get('weekday')] ?? -1;
-      const hour = parseInt(get('hour'), 10);
-      const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
-
-      return { dayOfWeek, hour, dateStr };
-    }
+    // Create the formatter ONCE outside the loop — Intl instantiation is expensive.
+    const ukFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      weekday: 'short',
+    });
+    const weekdayMap: Record<string, number> = {
+      Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0,
+    };
 
     // Group qualifying fixtures by UK local date
     const byDate: Record<string, any[]> = {};
@@ -817,7 +832,11 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
       const isoDate = fixture?.fixture?.date;
       if (!isoDate) continue;
 
-      const { dayOfWeek, hour, dateStr } = toUKParts(isoDate);
+      const parts = ukFormatter.formatToParts(new Date(isoDate));
+      const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+      const dayOfWeek = weekdayMap[get('weekday')] ?? -1;
+      const hour = parseInt(get('hour'), 10);
+      const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
 
       const isSaturday = dayOfWeek === 6;
       const qualifies = isSaturday
@@ -868,6 +887,9 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
       };
     });
 
+    // Cache for 2 minutes — gameweeks don't change between requests within the same session.
+    // Must-revalidate ensures a stale response is never served after expiry.
+    res.set('Cache-Control', 'public, max-age=120, must-revalidate');
     res.json({ gameweeks });
   } catch (error: any) {
     console.error('Error building gameweeks:', error);
