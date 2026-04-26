@@ -191,6 +191,24 @@ export interface SelectionsResponse {
   selections: SelectionRecord[];
 }
 
+// ----- GET /api/gameweek/current -----
+
+export interface CurrentGameweekInfo {
+  number: number;
+  label: string;
+  date: string;
+}
+
+export interface PlayerSelection {
+  username: string;
+  selection: SelectionRecord | null;
+}
+
+export interface CurrentGameweekResponse {
+  gameweek: CurrentGameweekInfo | null;
+  players: PlayerSelection[];
+}
+
 // ----- POST /api/matches/:fixtureId/select -----
 
 export interface SelectMatchResponse {
