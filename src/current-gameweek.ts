@@ -1,8 +1,7 @@
 import type { CurrentGameweekResponse, PlayerSelection, StealableResponse } from './api-types';
 
-declare const API_BASE_URL: string;
-
 (function () {
+  const API_BASE_URL = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
   const root = document.getElementById('current-gameweek-root');
   if (!root) return;
   const rootEl = root as HTMLElement;
