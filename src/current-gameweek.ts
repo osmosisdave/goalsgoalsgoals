@@ -1,4 +1,4 @@
-import type { CurrentGameweekResponse, PlayerSelection } from './api-types';
+import type { CurrentGameweekResponse, PlayerSelection, StealableResponse } from './api-types';
 
 declare const API_BASE_URL: string;
 
@@ -39,7 +39,7 @@ declare const API_BASE_URL: string;
     }
   }
 
-  function renderPlayerCard(player: PlayerSelection, isMe: boolean): HTMLDivElement {
+  function renderPlayerCard(player: PlayerSelection, isMe: boolean, isStealable: boolean): HTMLDivElement {
     const card = document.createElement('div');
     card.className = 'card';
     card.style.marginBottom = '12px';
@@ -85,6 +85,14 @@ declare const API_BASE_URL: string;
       matchRow.appendChild(statusBadge);
       content.appendChild(matchRow);
 
+      // At-risk warning — shown when the holder repeated a team vs their previous pick
+      if (isStealable) {
+        const riskBadge = document.createElement('div');
+        riskBadge.style.cssText = 'margin-top:8px;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:bold;background:#ff6f00;color:white;';
+        riskBadge.innerHTML = '<i class="material-icons" style="font-size:14px;">warning</i> At risk — this pick can be stolen';
+        content.appendChild(riskBadge);
+      }
+
       // Meta: league + date
       if (s.leagueName || s.date) {
         const meta = document.createElement('div');
@@ -111,6 +119,17 @@ declare const API_BASE_URL: string;
     return card;
   }
 
+  async function fetchStealable(): Promise<Set<number>> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/matches/stealable?season=${currentSeason}`);
+      if (!res.ok) return new Set();
+      const data: StealableResponse = await res.json();
+      return new Set(data.stealableFixtureIds);
+    } catch {
+      return new Set();
+    }
+  }
+
   async function render() {
     rootEl.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
 
@@ -124,7 +143,10 @@ declare const API_BASE_URL: string;
       } catch { /* ignore */ }
     }
 
-    const data = await fetchCurrentGameweek();
+    const [data, stealableIds] = await Promise.all([
+      fetchCurrentGameweek(),
+      fetchStealable(),
+    ]);
 
     rootEl.innerHTML = '';
 
@@ -183,7 +205,8 @@ declare const API_BASE_URL: string;
     });
 
     for (const player of sorted) {
-      rootEl.appendChild(renderPlayerCard(player, player.username === currentUsername));
+      const isStealable = player.selection != null && stealableIds.has(player.selection.fixtureId);
+      rootEl.appendChild(renderPlayerCard(player, player.username === currentUsername, isStealable));
     }
   }
 
