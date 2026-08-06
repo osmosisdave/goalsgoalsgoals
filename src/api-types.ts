@@ -288,6 +288,8 @@ export interface StandingEntry {
 
 export interface AppStandingsResponse {
   success: boolean;
+  season?: number;
+  availableSeasons?: number[];
   standings: StandingEntry[];
 }
 

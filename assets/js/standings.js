@@ -19,16 +19,16 @@ function elt(tag, attrs = {}, children = []) {
     return e;
 }
 // ----- API -----
-async function fetchStandings() {
+async function fetchStandings(season) {
     const apiBase = (window.GGG_API_ORIGIN || '').replace(/\/$/, '');
+    const url = season != null ? `${apiBase}/api/standings?season=${season}` : `${apiBase}/api/standings`;
     try {
-        const response = await fetch(`${apiBase}/api/standings`);
+        const response = await fetch(url);
         if (!response.ok) {
             console.error('Failed to fetch standings:', response.statusText);
             return null;
         }
-        const data = await response.json();
-        return data.standings || [];
+        return await response.json();
     }
     catch (error) {
         console.error('Error fetching standings:', error);
@@ -122,18 +122,15 @@ function renderTotals(container, allUsers) {
     container.appendChild(wrapper);
 }
 // ----- Entry point -----
-async function init() {
-    const root = document.getElementById('leagues-root');
-    if (!root)
-        return;
-    root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
-    const standings = await fetchStandings();
-    if (!standings || standings.length === 0) {
-        root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
+function seasonLabel(year) {
+    return `${year}/${String(year + 1).slice(2)} Season`;
+}
+function renderStandingsTable(container, standings) {
+    container.innerHTML = '';
+    if (standings.length === 0) {
+        container.innerHTML = '<p class="grey-text">No standings data available for this season yet.</p>';
         return;
     }
-    root.innerHTML = '';
-    // Group users by their assigned league
     const groups = {};
     standings.forEach(u => {
         const groupName = u.league || 'Unassigned';
@@ -141,12 +138,64 @@ async function init() {
         groups[groupName].push(u);
     });
     Object.keys(groups).sort().forEach(g => {
-        renderGroup(root, g, groups[g]);
+        renderGroup(container, g, groups[g]);
         const hr = document.createElement('hr');
         hr.style.cssText = 'border:none;border-top:1px dashed #999;margin:8px 0 16px 0;';
-        root.appendChild(hr);
+        container.appendChild(hr);
     });
-    renderTotals(root, standings);
+    renderTotals(container, standings);
+}
+async function init() {
+    var _a;
+    const root = document.getElementById('leagues-root');
+    if (!root)
+        return;
+    root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+    // Fetch default (current) season first to get available seasons list
+    const initialData = await fetchStandings();
+    if (!initialData) {
+        root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
+        return;
+    }
+    root.innerHTML = '';
+    const availableSeasons = initialData.availableSeasons || [];
+    let activeSeason = (_a = initialData.season) !== null && _a !== void 0 ? _a : null;
+    // Only render a season selector on the full leagues page (not the home widget)
+    const isLeaguesPage = !!document.getElementById('standings-season-selector');
+    let selectorEl = null;
+    if (isLeaguesPage && availableSeasons.length > 1) {
+        const selectorContainer = document.getElementById('standings-season-selector');
+        const select = document.createElement('select');
+        select.id = 'standings-season-select';
+        availableSeasons.forEach(yr => {
+            const opt = document.createElement('option');
+            opt.value = String(yr);
+            opt.textContent = seasonLabel(yr);
+            if (yr === activeSeason)
+                opt.selected = true;
+            select.appendChild(opt);
+        });
+        const label = document.createElement('label');
+        label.htmlFor = 'standings-season-select';
+        label.textContent = 'Season';
+        selectorContainer.appendChild(select);
+        selectorContainer.appendChild(label);
+        // Initialise Materialize select
+        if (typeof M !== 'undefined')
+            M.FormSelect.init(select);
+        selectorEl = select;
+    }
+    const tableContainer = document.createElement('div');
+    root.appendChild(tableContainer);
+    renderStandingsTable(tableContainer, initialData.standings || []);
+    if (selectorEl) {
+        selectorEl.addEventListener('change', async (e) => {
+            activeSeason = parseInt(e.target.value);
+            tableContainer.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+            const data = await fetchStandings(activeSeason);
+            renderStandingsTable(tableContainer, (data === null || data === void 0 ? void 0 : data.standings) || []);
+        });
+    }
 }
 document.addEventListener('DOMContentLoaded', init);
 export {};

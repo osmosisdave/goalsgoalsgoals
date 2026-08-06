@@ -50,3 +50,5 @@ server/oauth-client.json
 
 # TypeScript
 *.tsbuildinfo
+
+server/oauth-token.json
