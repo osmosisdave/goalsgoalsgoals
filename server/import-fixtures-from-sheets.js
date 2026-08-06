@@ -2,8 +2,11 @@
 /**
  * Imports fixtures from a Google Sheet into the MongoDB fixtures collection.
  *
- * Authentication: Uses Application Default Credentials (ADC).
- * Set up with: gcloud auth application-default login
+ * Authentication (in priority order):
+ *   1. GOOGLE_APPLICATION_CREDENTIALS env var pointing to a service account JSON key
+ *   2. oauth-client.json in this directory + a cached oauth-token.json
+ *      (token is created automatically on first run via browser OAuth flow)
+ *   3. Application Default Credentials (ADC) via gcloud auth application-default login
  *
  * Usage: node import-fixtures-from-sheets.js [--dry-run] [--season 2025]
  *
@@ -15,6 +18,10 @@ require('dotenv').config();
 const { google } = require('googleapis');
 const { MongoClient } = require('mongodb');
 const crypto = require('crypto');
+const fs     = require('fs');
+const path   = require('path');
+const http   = require('http');
+const { URL } = require('url');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -164,12 +171,90 @@ function mapRowToFixture(headers, row) {
   };
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+const SCOPES          = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+const OAUTH_CLIENT    = path.join(__dirname, 'oauth-client.json');
+const OAUTH_TOKEN     = path.join(__dirname, 'oauth-token.json');
+
+/**
+ * Builds an authenticated Google auth client.
+ * Priority: service account key → oauth-client.json → ADC.
+ */
+async function getAuthClient() {
+  // 1. Service account key via env var
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    const auth = new google.auth.GoogleAuth({ scopes: SCOPES });
+    return auth.getClient();
+  }
+
+  // 2. oauth-client.json + cached token
+  if (fs.existsSync(OAUTH_CLIENT)) {
+    const clientJson = JSON.parse(fs.readFileSync(OAUTH_CLIENT));
+    const { client_id, client_secret, redirect_uris } = clientJson.installed || clientJson.web;
+    const oauth2 = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+
+    if (fs.existsSync(OAUTH_TOKEN)) {
+      oauth2.setCredentials(JSON.parse(fs.readFileSync(OAUTH_TOKEN)));
+      return oauth2;
+    }
+
+    // No cached token — do a local-server OAuth flow
+    const tokenJson = await runOAuthFlow(oauth2);
+    fs.writeFileSync(OAUTH_TOKEN, JSON.stringify(tokenJson, null, 2));
+    console.log(`   ✅ Token saved to ${OAUTH_TOKEN}`);
+    return oauth2;
+  }
+
+  // 3. Fall back to ADC
+  const auth = new google.auth.GoogleAuth({ scopes: SCOPES });
+  return auth.getClient();
+}
+
+/**
+ * Opens the browser for the user to approve access, then captures the
+ * redirect on localhost:3939 and exchanges the code for a token.
+ */
+function runOAuthFlow(oauth2) {
+  return new Promise((resolve, reject) => {
+    const redirectUri = 'http://localhost:3939';
+    oauth2.redirectUri = redirectUri;
+
+    const authUrl = oauth2.generateAuthUrl({ access_type: 'offline', scope: SCOPES });
+    console.log('\n🔐 Authorization required.');
+    console.log('   Open this URL in your browser:\n');
+    console.log(`   ${authUrl}\n`);
+
+    const server = http.createServer(async (req, res) => {
+      try {
+        const url  = new URL(req.url, redirectUri);
+        const code = url.searchParams.get('code');
+        if (!code) { res.end('No code found.'); return; }
+
+        res.end('<h2>✅ Authorised! You can close this tab.</h2>');
+        server.close();
+
+        const { tokens } = await oauth2.getToken(code);
+        oauth2.setCredentials(tokens);
+        resolve(tokens);
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    server.listen(3939, () => {
+      console.log('   Waiting for browser redirect on http://localhost:3939 …\n');
+    });
+
+    server.on('error', reject);
+  });
+}
+
 // ── Google Sheets fetch ───────────────────────────────────────────────────────
 
 async function fetchSheetRows() {
-  // ADC picks up credentials from: gcloud auth application-default login
-  const auth   = new google.auth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
-  const sheets = google.sheets({ version: 'v4', auth });
+  const authClient = await getAuthClient();
+  const sheets     = google.sheets({ version: 'v4', auth: authClient });
 
   const range    = `'${SHEET_TAB}'`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });

@@ -19,6 +19,23 @@ API_FOOTBALL_KEY=your_rapidapi_key_here
 API_FOOTBALL_HOST=v3.football.api-sports.io
 ```
 
+If Google blocks browser-based auth on your account, use a service account instead:
+
+1. In Google Cloud Console, open the project you want to use.
+2. Go to IAM & Admin → Service Accounts and create a new service account.
+3. Create and download a JSON key for that service account.
+4. Save the file somewhere stable, for example `~/keys/goalsgoalsgoals-sheet-key.json`.
+5. Point the app at that file before running the importer:
+
+  ```bash
+  export GOOGLE_APPLICATION_CREDENTIALS="$HOME/keys/goalsgoalsgoals-sheet-key.json"
+  ```
+
+  If you want it to persist, add the same line to `server/.env`.
+6. Find the service account email in Google Cloud Console; it usually ends in `iam.gserviceaccount.com`.
+7. Open the Google Sheet, click **Share**, and add that service account email as a viewer.
+8. Re-run the importer. Without the share step, Google will authenticate the key but still deny sheet access.
+
 ### 3. Build TypeScript Code
 
 The fixture syncing functionality is written in TypeScript and needs to be compiled:
@@ -164,6 +181,24 @@ Fixtures are stored in the `fixtures` collection with this structure:
 - Verify `MONGODB_URI` is set in `server/.env`
 - Check MongoDB Atlas connection string is valid
 - Ensure IP whitelist includes your current IP
+
+### "Request had insufficient authentication scopes"
+- Revoke the old ADC token first: `gcloud auth application-default revoke`
+- Log in again with both required scopes: `gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/spreadsheets.readonly`
+- If you still see the error, make sure you are using the same Google account that has access to the sheet
+
+### "Google blocks access when I try to auth"
+- Use a service account instead of browser login
+- Point `GOOGLE_APPLICATION_CREDENTIALS` at the service account JSON key
+- Share the sheet with the service account email so it can read the tab
+
+### Quick macOS example
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/keys/goalsgoalsgoals-sheet-key.json"
+cd /Users/dave/repos/goalsgoalsgoals/server
+node import-fixtures-from-sheets.js --season 2026
+```
 
 ## Development
 

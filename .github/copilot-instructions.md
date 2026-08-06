@@ -138,3 +138,15 @@ If either of these is ever found in `package.json` or `package-lock.json`, remov
 5. After any frontend changes (new or edited `src/` files): run `npm run build` from the root.
 6. New frontend logic should be written in `src/` as TypeScript, not added to `assets/js/` as plain JS.
 7. Note any assumptions or follow-up steps clearly.
+
+---
+
+## TODO List
+
+A prioritised backlog of known technical debt lives in [`TODO.md`](../TODO.md) at the project root.
+
+**Before starting any task:** skim `TODO.md` and check whether any items in the same file or area of code
+can be resolved as part of the current change — without scope-creeping the primary task. If a TODO item
+can be completed with minimal extra effort (e.g. already touching that function, already in that route),
+do it and mark it complete in `TODO.md`. If it would require meaningful extra work, leave it and note it
+in your response instead.

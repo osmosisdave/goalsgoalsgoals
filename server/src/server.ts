@@ -8,7 +8,7 @@ import cors from 'cors';
 import { MongoClient, Collection, Db } from 'mongodb';
 import * as dotenv from 'dotenv';
 import apiRateLimiter from './api-rate-limiter';
-import { DEFAULT_LEAGUE_IDS } from './fixture-fetcher';
+import { DEFAULT_LEAGUE_IDS, FixtureFetcher } from './fixture-fetcher';
 
 // Load .env into process.env when present (for local development)
 try {
@@ -158,24 +158,6 @@ async function getUserForAuth(username: string): Promise<User | null> {
   return ((data.users || []) as User[]).find(u => u.username === username) || null;
 }
 
-async function writeUsers(users: User[]): Promise<void> {
-  if (usersCollection) {
-    await usersCollection.deleteMany({});
-    if (users.length) {
-      await usersCollection.insertMany(
-        users.map(u => ({
-          username: u.username,
-          passwordHash: u.passwordHash,
-          role: u.role,
-          league: u.league || null
-        }))
-      );
-    }
-    return;
-  }
-  await fs.writeJson(USERS_FILE, { users }, { spaces: 2 });
-}
-
 async function createUserInStore(user: { username: string; passwordHash: string; role: string }): Promise<void> {
   if (usersCollection) {
     await usersCollection.insertOne({ ...user, league: null } as User);
@@ -270,6 +252,31 @@ function verifyToken(token: string): JWTPayload | null {
   }
 }
 
+// Football seasons run Aug–May; the season is identified by the year it starts.
+function currentSeasonYear(): number {
+  const now = new Date();
+  return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+// Auth middleware — attaches the decoded JWT payload to res.locals.user.
+// requireAuth accepts any valid token; requireAdmin also checks role === 'admin'.
+function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const token = (req.headers.authorization || '').replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  res.locals.user = decoded;
+  next();
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const token = (req.headers.authorization || '').replace(/^Bearer /i, '');
+  const decoded = verifyToken(token);
+  if (!decoded) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  if (decoded.role !== 'admin') { res.status(403).json({ error: 'Forbidden' }); return; }
+  res.locals.user = decoded;
+  next();
+}
+
 // Express app setup
 const app = express();
 
@@ -316,13 +323,7 @@ app.use(express.static(staticRoot));
 // Routes
 
 // Update user's league assignment (admin only)
-app.put('/api/users/:username/league', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
+app.put('/api/users/:username/league', requireAdmin, async (req: Request, res: Response) => {
   const username = req.params.username;
   const { league } = req.body || {};
   if (!username) return res.status(400).json({ error: 'Missing username' });
@@ -356,13 +357,7 @@ app.get('/api/leagues', async (req: Request, res: Response) => {
 });
 
 // Create league (admin only)
-app.post('/api/leagues', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
+app.post('/api/leagues', requireAdmin, async (req: Request, res: Response) => {
   const { name } = req.body || {};
   if (!name) return res.status(400).json({ error: 'Missing league name' });
   try {
@@ -376,12 +371,7 @@ app.post('/api/leagues', async (req: Request, res: Response) => {
 });
 
 // Delete league (admin only)
-app.delete('/api/leagues/:name', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+app.delete('/api/leagues/:name', requireAdmin, async (req: Request, res: Response) => {
   const name = req.params.name as string;
   if (!name) return res.status(400).json({ error: 'Missing league name' });
   try {
@@ -396,59 +386,34 @@ app.delete('/api/leagues/:name', async (req: Request, res: Response) => {
 // Login
 app.post('/api/login', async (req: Request, res: Response) => {
   const { username, password } = req.body || {};
-  console.log(`[LOGIN] Attempt for username: "${username}"`);
-  
   if (!username || !password) {
-    console.log('[LOGIN] Missing credentials in request body');
     return res.status(400).json({ error: 'Missing credentials' });
   }
-  
   const user = await getUserForAuth(username);
-  if (!user) {
-    console.log(`[LOGIN] User "${username}" not found in database`);
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-  
-  console.log(`[LOGIN] User "${username}" found, verifying password...`);
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  
+  const ok = user ? await bcrypt.compare(password, user.passwordHash) : false;
   if (!ok) {
-    console.log(`[LOGIN] Password verification failed for "${username}"`);
+    console.log(`[LOGIN] Failed for "${username}"`);
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  
   console.log(`[LOGIN] Success for "${username}"`);
-  const token = createToken(user);
+  const token = createToken(user!);
   res.json({ token });
 });
 
 // Get current user info
-app.get('/api/me', (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  res.json({ username: decoded.sub, role: decoded.role });
+app.get('/api/me', requireAuth, (req: Request, res: Response) => {
+  const { sub: username, role } = res.locals.user as JWTPayload;
+  res.json({ username, role });
 });
 
 // List users (admin only)
-app.get('/api/users', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+app.get('/api/users', requireAdmin, async (req: Request, res: Response) => {
   const users = await readUsers();
   res.json(users.map(u => ({ username: u.username, role: u.role, league: u.league || null })));
 });
 
 // Create user (admin only)
-app.post('/api/users', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+app.post('/api/users', requireAdmin, async (req: Request, res: Response) => {
   const { username, password, role } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   const existing = await getUserForAuth(username);
@@ -456,17 +421,6 @@ app.post('/api/users', async (req: Request, res: Response) => {
   const hash = await bcrypt.hash(password, 12);
   await createUserInStore({ username, passwordHash: hash, role: role || 'user' });
   res.status(201).json({ username, role: role || 'user' });
-});
-
-// Admin users endpoint (alias)
-app.get('/api/admin/users', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  const users = await readUsers();
-  res.json(users.map(u => ({ username: u.username, role: u.role, league: u.league || null })));
 });
 
 // Rate limiter status (public)
@@ -481,13 +435,7 @@ app.get('/api/rate-limit/status', async (req: Request, res: Response) => {
 });
 
 // Rate limiter analytics (admin only)
-app.get('/api/rate-limit/analytics', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
+app.get('/api/rate-limit/analytics', requireAdmin, async (req: Request, res: Response) => {
   try {
     const analytics = await apiRateLimiter.getAnalytics();
     res.json(analytics);
@@ -498,13 +446,7 @@ app.get('/api/rate-limit/analytics', async (req: Request, res: Response) => {
 });
 
 // Reset rate limiter (admin only)
-app.post('/api/rate-limit/reset', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
+app.post('/api/rate-limit/reset', requireAdmin, async (req: Request, res: Response) => {
   try {
     await apiRateLimiter.reset();
     res.json({ message: 'Rate limiter reset successfully' });
@@ -515,13 +457,7 @@ app.post('/api/rate-limit/reset', async (req: Request, res: Response) => {
 });
 
 // Sync leagues from API-Football (admin only)
-app.post('/api/admin/sync-leagues', async (req: Request, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
+app.post('/api/admin/sync-leagues', requireAdmin, async (req: Request, res: Response) => {
   if (!mongoClient) {
     return res.status(500).json({ error: 'MongoDB not connected' });
   }
@@ -538,8 +474,6 @@ app.post('/api/admin/sync-leagues', async (req: Request, res: Response) => {
 
   try {
     console.log('Starting leagues sync...');
-
-    const { FixtureFetcher } = require('../dist/fixture-fetcher');
 
     const fetcher = new FixtureFetcher(
       mongoClient,
@@ -583,13 +517,7 @@ app.post('/api/admin/sync-leagues', async (req: Request, res: Response) => {
 });
 
 // Sync fixtures from API-Football (admin only)
-app.post('/api/admin/sync-fixtures', async (req: Request<{}, {}, SyncFixturesRequest>, res: Response) => {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer /i, '');
-  const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'Unauthorized' });
-  if (decoded.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-
+app.post('/api/admin/sync-fixtures', requireAdmin, async (req: Request<{}, {}, SyncFixturesRequest>, res: Response) => {
   if (!mongoClient) {
     return res.status(500).json({ error: 'MongoDB not connected' });
   }
@@ -615,8 +543,6 @@ app.post('/api/admin/sync-fixtures', async (req: Request<{}, {}, SyncFixturesReq
     const dateRangeMsg = dateRange !== undefined ? `${dateRange} days` : 'no date range (full season)';
     console.log(`Starting fixture sync for season ${season}, dateRange ${dateRangeMsg}`);
     console.log(`Syncing fixtures for ${targetLeagueIds.length} leagues: ${targetLeagueIds.join(', ')}`);
-
-    const { FixtureFetcher } = require('../dist/fixture-fetcher');
 
     const fetcher = new FixtureFetcher(
       mongoClient,
@@ -766,23 +692,48 @@ app.get('/api/football/fixtures', async (req: Request, res: Response) => {
   }
 });
 
-// Get fixtures grouped into gameweeks using UK local time rules:
-//   - Saturday: 15:00 local kickoffs only
-//   - Any other day: 19:00–20:00 local kickoffs only
-//   - Only date-groups with >= 30 qualifying fixtures become a gameweek
-//   - Gameweeks are numbered sequentially by date (GW1, GW2, …)
 // ---------------------------------------------------------------------------
 // Shared gameweek helpers
 // ---------------------------------------------------------------------------
 
+// Projection applied when building gameweek response payloads.
+// Only the fields the frontend renders — avoids transmitting ~5800 full documents.
+const GAMEWEEK_PROJECTION: Record<string, 0 | 1> = {
+  'fixture.id': 1,
+  'fixture.date': 1,
+  'fixture.status.short': 1,
+  'fixture.venue.name': 1,
+  'league.id': 1,
+  'league.name': 1,
+  'league.round': 1,
+  'teams.home.id': 1,
+  'teams.home.name': 1,
+  'teams.home.winner': 1,
+  'teams.away.id': 1,
+  'teams.away.name': 1,
+  'teams.away.winner': 1,
+  'goals.home': 1,
+  'goals.away': 1,
+};
+
 /**
- * Returns the ordered list of qualifying GW date strings (YYYY-MM-DD, UK local)
- * for the given season. A date qualifies when it has ≥30 fixtures that kick off
- * at Saturday 15:00 UK or other days 19:00–20:00 UK.
+ * Single source of truth for the UK local-time gameweek qualification rules:
+ *   - Saturday: 15:00 UK kickoff only
+ *   - Any other day: 19:00–20:00 UK kickoff only
+ *   - Only date-groups with ≥30 qualifying fixtures become a gameweek
+ *
+ * Pass GAMEWEEK_PROJECTION when the full fixture payload is needed, or a
+ * minimal projection such as { 'fixture.date': 1 } when only dates are needed.
+ * Returns an array of { date, fixtures } sorted chronologically.
  */
-async function buildQualifyingDates(db: Db, season: number): Promise<string[]> {
-  const fixtures = await db.collection('fixtures')
-    .find({ 'league.season': season }, { projection: { 'fixture.date': 1, _id: 0 } })
+async function buildGameweekFixtures(
+  db: Db,
+  season: number,
+  projection: Record<string, 0 | 1>,
+): Promise<Array<{ date: string; fixtures: any[] }>> {
+  const allFixtures = await db.collection('fixtures')
+    .find({ 'league.season': season }, { projection })
+    .sort({ 'fixture.date': 1 })
     .toArray();
 
   const ukFmt = new Intl.DateTimeFormat('en-GB', {
@@ -791,9 +742,9 @@ async function buildQualifyingDates(db: Db, season: number): Promise<string[]> {
     hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'short',
   });
   const weekdayMap: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
-  const counts: Record<string, number> = {};
+  const byDate: Record<string, any[]> = {};
 
-  for (const f of fixtures) {
+  for (const f of allFixtures) {
     const isoDate = f?.fixture?.date;
     if (!isoDate) continue;
     const parts = ukFmt.formatToParts(new Date(isoDate));
@@ -804,13 +755,23 @@ async function buildQualifyingDates(db: Db, season: number): Promise<string[]> {
     const isSat = dayOfWeek === 6;
     const qualifies = isSat ? hour === 15 : (hour === 19 || hour === 20);
     if (!qualifies) continue;
-    counts[dateStr] = (counts[dateStr] || 0) + 1;
+    if (!byDate[dateStr]) byDate[dateStr] = [];
+    byDate[dateStr].push(f);
   }
 
-  return Object.entries(counts)
-    .filter(([, n]) => n >= 30)
-    .map(([d]) => d)
-    .sort();
+  return Object.entries(byDate)
+    .filter(([, fxs]) => fxs.length >= 30)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, fxs]) => ({ date, fixtures: fxs }));
+}
+
+/**
+ * Returns the ordered list of qualifying GW date strings.
+ * Thin wrapper over buildGameweekFixtures using a minimal projection.
+ */
+async function buildQualifyingDates(db: Db, season: number): Promise<string[]> {
+  const groups = await buildGameweekFixtures(db, season, { 'fixture.date': 1, _id: 0 });
+  return groups.map(g => g.date);
 }
 
 /**
@@ -843,87 +804,14 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    // Football seasons run Aug–May; season year = start year of the season.
-    const nowYear = new Date();
-    const currentSeason = nowYear.getMonth() >= 7 ? nowYear.getFullYear() : nowYear.getFullYear() - 1;
-    const season = req.query.season ? parseInt(req.query.season as string) : currentSeason;
+    const now = new Date();
+    const season = req.query.season ? parseInt(req.query.season as string) : currentSeasonYear();
     const db = mongoClient.db('goalsgoalsgoals');
 
-    // Project only the fields the frontend actually renders — avoids sending ~5800
-    // full documents (logos, referee, halftime scores, etc.) over the wire.
-    const projection = {
-      'fixture.id': 1,
-      'fixture.date': 1,
-      'fixture.status.short': 1,
-      'fixture.venue.name': 1,
-      'league.id': 1,
-      'league.name': 1,
-      'league.round': 1,
-      'teams.home.id': 1,
-      'teams.home.name': 1,
-      'teams.home.winner': 1,
-      'teams.away.id': 1,
-      'teams.away.name': 1,
-      'teams.away.winner': 1,
-      'goals.home': 1,
-      'goals.away': 1,
-    };
+    const groups = await buildGameweekFixtures(db, season, GAMEWEEK_PROJECTION);
 
-    const fixtures = await db.collection('fixtures')
-      .find({ 'league.season': season }, { projection })
-      .sort({ 'fixture.date': 1 })
-      .toArray();
-
-    // Convert a UTC ISO date string to UK local time components.
-    // UK uses GMT (UTC+0) in winter and BST (UTC+1) in summer.
-    // We use Intl to resolve this correctly without a tz library.
-    // Create the formatter ONCE outside the loop — Intl instantiation is expensive.
-    const ukFormatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Europe/London',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      weekday: 'short',
-    });
-    const weekdayMap: Record<string, number> = {
-      Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0,
-    };
-
-    // Group qualifying fixtures by UK local date
-    const byDate: Record<string, any[]> = {};
-
-    for (const fixture of fixtures) {
-      const isoDate = fixture?.fixture?.date;
-      if (!isoDate) continue;
-
-      const parts = ukFormatter.formatToParts(new Date(isoDate));
-      const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
-      const dayOfWeek = weekdayMap[get('weekday')] ?? -1;
-      const hour = parseInt(get('hour'), 10);
-      const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
-
-      const isSaturday = dayOfWeek === 6;
-      const qualifies = isSaturday
-        ? hour === 15                        // Saturday: 3pm only
-        : (hour === 19 || hour === 20);      // Other days: 19:00–20:00
-
-      if (!qualifies) continue;
-
-      if (!byDate[dateStr]) byDate[dateStr] = [];
-      byDate[dateStr].push(fixture);
-    }
-
-    // Keep only dates with >= 30 qualifying fixtures, sorted chronologically
-    const qualifyingDates = Object.entries(byDate)
-      .filter(([, fxs]) => fxs.length >= 30)
-      .sort(([a], [b]) => a.localeCompare(b));
-
-    // Build gameweek objects with sequential numbering
-    const now = new Date();
-    const gameweeks = qualifyingDates.map(([dateStr, fxs], idx) => {
+    // GW1 is always open. GWN (N > 1) unlocks at 10:00 UTC the day after GW(N-1)'s date.
+    const gameweeks = groups.map(({ date: dateStr, fixtures: fxs }, idx) => {
       const d = new Date(`${dateStr}T12:00:00Z`);
       const label = `GW${idx + 1} (${d.toLocaleDateString('en-GB', {
         weekday: 'short',
@@ -932,12 +820,10 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
         timeZone: 'Europe/London',
       })})`;
 
-      // GW1 is always open. GWN (N > 1) unlocks at 10:00 UTC the day after the
-      // previous gameweek's date.
       let isLocked = false;
       let unlocksAt: string | null = null;
       if (idx > 0) {
-        const prevDate = qualifyingDates[idx - 1][0]; // "YYYY-MM-DD"
+        const prevDate = groups[idx - 1].date;
         const unlockDate = new Date(`${prevDate}T10:00:00Z`);
         unlockDate.setUTCDate(unlockDate.getUTCDate() + 1);
         unlocksAt = unlockDate.toISOString();
@@ -955,7 +841,6 @@ app.get('/api/football/gameweeks', async (req: Request, res: Response) => {
     });
 
     // Cache for 2 minutes — gameweeks don't change between requests within the same session.
-    // Must-revalidate ensures a stale response is never served after expiry.
     res.set('Cache-Control', 'public, max-age=120, must-revalidate');
     res.json({ gameweeks });
   } catch (error: any) {
@@ -972,72 +857,26 @@ app.get('/api/gameweek/current', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const season = req.query.season ? parseInt(req.query.season as string) : (() => {
-      const n = new Date();
-      return n.getMonth() >= 7 ? n.getFullYear() : n.getFullYear() - 1;
-    })();
+    const season = req.query.season
+      ? parseInt(req.query.season as string)
+      : currentSeasonYear();
 
     const db = mongoClient.db('goalsgoalsgoals');
 
-    // Re-use the same gameweek-building logic to find the current (last unlocked) gameweek
-    const fixtures = await db.collection('fixtures')
-      .find({ 'league.season': season })
-      .sort({ 'fixture.date': 1 })
-      .toArray();
+    const dates = await buildQualifyingDates(db, season);
+    const { currentDate } = getCurrentAndPrevGWDates(dates);
 
-    function toUKDateStr(isoDate: string): { dayOfWeek: number; hour: number; dateStr: string } {
-      const d = new Date(isoDate);
-      const fmt = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Europe/London',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'short',
-      });
-      const parts = fmt.formatToParts(d);
-      const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
-      const weekdayMap: Record<string, number> = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:0 };
-      return {
-        dayOfWeek: weekdayMap[get('weekday')] ?? -1,
-        hour: parseInt(get('hour'), 10),
-        dateStr: `${get('year')}-${get('month')}-${get('day')}`,
-      };
+    if (!currentDate) {
+      return res.json({ gameweek: null, players: [] });
     }
 
-    const byDate: Record<string, any[]> = {};
-    for (const f of fixtures) {
-      const isoDate = f?.fixture?.date;
-      if (!isoDate) continue;
-      const { dayOfWeek, hour, dateStr } = toUKDateStr(isoDate);
-      const qualifies = dayOfWeek === 6 ? hour === 15 : (hour === 19 || hour === 20);
-      if (!qualifies) continue;
-      if (!byDate[dateStr]) byDate[dateStr] = [];
-      byDate[dateStr].push(f);
-    }
-
-    const qualifyingDates = Object.entries(byDate)
-      .filter(([, fxs]) => fxs.length >= 30)
-      .sort(([a], [b]) => a.localeCompare(b));
-
-    const now = new Date();
-    let currentGW: { number: number; label: string; date: string } | null = null;
-
-    for (let idx = 0; idx < qualifyingDates.length; idx++) {
-      const [dateStr] = qualifyingDates[idx];
-      let isLocked = false;
-      if (idx > 0) {
-        const prevDate = qualifyingDates[idx - 1][0];
-        const unlockDate = new Date(`${prevDate}T10:00:00Z`);
-        unlockDate.setUTCDate(unlockDate.getUTCDate() + 1);
-        isLocked = now < unlockDate;
-      }
-      if (!isLocked) {
-        const d = new Date(`${dateStr}T12:00:00Z`);
-        currentGW = {
-          number: idx + 1,
-          label: `GW${idx + 1} (${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })})`,
-          date: dateStr,
-        };
-      }
-    }
+    const currentIdx = dates.indexOf(currentDate);
+    const d = new Date(`${currentDate}T12:00:00Z`);
+    const currentGW = {
+      number: currentIdx + 1,
+      label: `GW${currentIdx + 1} (${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })})`,
+      date: currentDate,
+    };
 
     if (!currentGW) {
       return res.json({ gameweek: null, players: [] });
@@ -1161,20 +1000,9 @@ app.get('/api/football/teams', async (req: Request, res: Response) => {
 });
 
 // Select a match
-app.post('/api/matches/:fixtureId/select', async (req: Request, res: Response) => {
+app.post('/api/matches/:fixtureId/select', requireAuth, async (req: Request, res: Response) => {
   try {
-    const auth = req.headers.authorization || '';
-    const token = auth.replace(/^Bearer /i, '');
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Please log in to select a match'
-      });
-    }
-
-    const username = decoded.sub;
+    const username = (res.locals.user as JWTPayload).sub;
     const fixtureId = parseInt(req.params.fixtureId as string);
 
     if (!mongoClient) {
@@ -1292,9 +1120,7 @@ app.get('/api/matches/stealable', async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    const nowYear = new Date();
-    const defaultSeason = nowYear.getMonth() >= 7 ? nowYear.getFullYear() : nowYear.getFullYear() - 1;
-    const season = req.query.season ? parseInt(req.query.season as string) : defaultSeason;
+    const season = req.query.season ? parseInt(req.query.season as string) : currentSeasonYear();
     const db = mongoClient.db('goalsgoalsgoals');
 
     const dates = await buildQualifyingDates(db, season);
@@ -1344,17 +1170,9 @@ app.get('/api/matches/stealable', async (req: Request, res: Response) => {
 });
 
 // Unselect a match
-app.delete('/api/matches/:fixtureId/select', async (req: Request, res: Response) => {
+app.delete('/api/matches/:fixtureId/select', requireAuth, async (req: Request, res: Response) => {
   try {
-    const auth = req.headers.authorization || '';
-    const token = auth.replace(/^Bearer /i, '');
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const username = decoded.sub;
+    const username = (res.locals.user as JWTPayload).sub;
     const fixtureId = parseInt(req.params.fixtureId as string);
 
     if (!mongoClient) {
@@ -1385,16 +1203,9 @@ app.delete('/api/matches/:fixtureId/select', async (req: Request, res: Response)
 // Steal another user's match selection for the current gameweek.
 // The target pick must meet the consecutive-team criterion: the victim picked
 // a team (home or away) that also appeared in their previous GW pick.
-app.post('/api/matches/:fixtureId/steal', async (req: Request, res: Response) => {
+app.post('/api/matches/:fixtureId/steal', requireAuth, async (req: Request, res: Response) => {
   try {
-    const auth = req.headers.authorization || '';
-    const token = auth.replace(/^Bearer /i, '');
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return res.status(401).json({ error: 'Unauthorized', message: 'Please log in to steal a match' });
-    }
-
-    const username = decoded.sub;
+    const username = (res.locals.user as JWTPayload).sub;
     const fixtureId = parseInt(req.params.fixtureId as string);
 
     if (!mongoClient) {
@@ -1413,9 +1224,7 @@ app.post('/api/matches/:fixtureId/steal', async (req: Request, res: Response) =>
     }
 
     // Confirm we are in the current (unlocked) gameweek
-    const nowYear = new Date();
-    const defaultSeason = nowYear.getMonth() >= 7 ? nowYear.getFullYear() : nowYear.getFullYear() - 1;
-    const season: number = targetSelection.season || defaultSeason;
+    const season: number = targetSelection.season || currentSeasonYear();
     const dates = await buildQualifyingDates(db, season);
     const { currentDate, prevDate } = getCurrentAndPrevGWDates(dates);
 
@@ -1555,7 +1364,11 @@ app.get('/api/standings', async (req: Request, res: Response) => {
     }
 
     const db = mongoClient.db('goalsgoalsgoals');
-    
+
+    // Determine which season to show; default to current season
+    const requestedSeason: number | null = req.query.season ? parseInt(req.query.season as string) : null;
+    const seasonFilter = requestedSeason ?? currentSeasonYear();
+
     // Get all users (excluding admin)
     const users = await readUsers();
     const regularUsers = users.filter(u => u.role !== 'admin');
@@ -1567,10 +1380,21 @@ app.get('/api/standings', async (req: Request, res: Response) => {
 
     // Get all finished fixtures to calculate results
     const fixtureIds = selections.map(s => s.fixtureId);
-    const fixtures = await db.collection('fixtures').find({
+    const allFinishedFixtures = await db.collection('fixtures').find({
       'fixture.id': { $in: fixtureIds },
       'fixture.status.short': 'FT'
     }).toArray();
+
+    // Derive available seasons from the finished fixtures that have selections
+    const seasonSet = new Set<number>();
+    allFinishedFixtures.forEach(f => {
+      const s = f.league?.season;
+      if (typeof s === 'number') seasonSet.add(s);
+    });
+    const availableSeasons: number[] = Array.from(seasonSet).sort((a, b) => b - a);
+
+    // Filter fixtures to the requested season
+    const fixtures = allFinishedFixtures.filter(f => f.league?.season === seasonFilter);
 
     // Create a map of fixture results
     const fixtureMap = new Map();
@@ -1651,6 +1475,8 @@ app.get('/api/standings', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
+      season: seasonFilter,
+      availableSeasons,
       standings: userStats
     });
   } catch (error: any) {
@@ -1660,7 +1486,7 @@ app.get('/api/standings', async (req: Request, res: Response) => {
 });
 
 // Get match selection history
-app.get('/api/matches/history', async (req: Request, res: Response) => {
+app.get('/api/matches/history', requireAuth, async (req: Request, res: Response) => {
   try {
     if (!mongoClient) {
       return res.status(503).json({ error: 'Database not connected' });
