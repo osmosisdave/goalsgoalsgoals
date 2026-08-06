@@ -143,6 +143,52 @@ function renderTotals(container: HTMLElement, allUsers: StandingEntry[]): void {
   container.appendChild(wrapper);
 }
 
+function buildSeasonOptions(select: HTMLSelectElement, availableSeasons: number[], activeSeason: number | null): void {
+  const seen = new Set<string>();
+  const options = Array.from(select.options);
+  options.forEach(option => seen.add(option.value));
+
+  const seasonCandidates = [...availableSeasons];
+  if (activeSeason != null && !seen.has(String(activeSeason))) {
+    seasonCandidates.unshift(activeSeason);
+  }
+
+  seasonCandidates.forEach(year => {
+    const value = String(year);
+    if (seen.has(value)) return;
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = seasonLabel(year);
+    if (activeSeason != null && year === activeSeason) opt.selected = true;
+    select.appendChild(opt);
+    seen.add(value);
+  });
+
+  if (activeSeason != null) {
+    const selected = Array.from(select.options).find(option => option.value === String(activeSeason));
+    if (selected) selected.selected = true;
+  }
+}
+
+function renderSeasonSelector(container: HTMLElement, availableSeasons: number[], activeSeason: number | null): HTMLSelectElement | null {
+  if (availableSeasons.length === 0 && activeSeason == null) return null;
+
+  const select = document.createElement('select');
+  select.id = 'standings-season-select';
+
+  buildSeasonOptions(select, availableSeasons, activeSeason);
+
+  const label = document.createElement('label');
+  label.htmlFor = 'standings-season-select';
+  label.textContent = 'Season';
+
+  container.appendChild(select);
+  container.appendChild(label);
+
+  if (typeof M !== 'undefined') M.FormSelect.init(select);
+  return select;
+}
+
 // ----- Entry point -----
 
 function seasonLabel(year: number): string {
@@ -152,52 +198,6 @@ function seasonLabel(year: number): string {
 function renderStandingsTable(container: HTMLElement, standings: StandingEntry[]): void {
   container.innerHTML = '';
   if (standings.length === 0) {
-    container.innerHTML = '<p class="grey-text">No standings data available for this season yet.</p>';
-    return;
-  }
-  const groups: Record<string, StandingEntry[]> = {};
-  standings.forEach(u => {
-    const groupName = u.league || 'Unassigned';
-    groups[groupName] = groups[groupName] || [];
-    groups[groupName].push(u);
-  });
-  Object.keys(groups).sort().forEach(g => {
-    renderGroup(container, g, groups[g]);
-    const hr = document.createElement('hr');
-    hr.style.cssText = 'border:none;border-top:1px dashed #999;margin:8px 0 16px 0;';
-    container.appendChild(hr);
-  });
-  renderTotals(container, standings);
-}
-
-async function init(): Promise<void> {
-  const root = document.getElementById('leagues-root');
-  if (!root) return;
-
-  root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
-
-  // Fetch default (current) season first to get available seasons list
-  const initialData = await fetchStandings();
-
-  if (!initialData) {
-    root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
-    return;
-  }
-
-  root.innerHTML = '';
-
-  const availableSeasons = initialData.availableSeasons || [];
-  let activeSeason = initialData.season ?? null;
-
-  // Only render a season selector on the full leagues page (not the home widget)
-  const isLeaguesPage = !!document.getElementById('standings-season-selector');
-  let selectorEl: HTMLSelectElement | null = null;
-
-  if (isLeaguesPage && availableSeasons.length > 1) {
-    const selectorContainer = document.getElementById('standings-season-selector')!;
-    const select = document.createElement('select');
-    select.id = 'standings-season-select';
-    availableSeasons.forEach(yr => {
       const opt = document.createElement('option');
       opt.value = String(yr);
       opt.textContent = seasonLabel(yr);

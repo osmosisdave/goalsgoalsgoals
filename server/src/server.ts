@@ -1385,13 +1385,12 @@ app.get('/api/standings', async (req: Request, res: Response) => {
       'fixture.status.short': 'FT'
     }).toArray();
 
-    // Derive available seasons from the finished fixtures that have selections
-    const seasonSet = new Set<number>();
-    allFinishedFixtures.forEach(f => {
-      const s = f.league?.season;
-      if (typeof s === 'number') seasonSet.add(s);
-    });
-    const availableSeasons: number[] = Array.from(seasonSet).sort((a, b) => b - a);
+    // Derive available seasons from fixture data so the league table can switch
+    // between seasons even before there are completed selections for that year.
+    const seasonsFromFixtures = await db.collection('fixtures').distinct('league.season');
+    const distinctSeasons = seasonsFromFixtures
+      .filter((season): season is number => typeof season === 'number' && !Number.isNaN(season))
+      .sort((a, b) => b - a);
 
     // Filter fixtures to the requested season
     const fixtures = allFinishedFixtures.filter(f => f.league?.season === seasonFilter);
@@ -1476,7 +1475,7 @@ app.get('/api/standings', async (req: Request, res: Response) => {
     res.json({
       success: true,
       season: seasonFilter,
-      availableSeasons,
+      availableSeasons: distinctSeasons,
       standings: userStats
     });
   } catch (error: any) {
