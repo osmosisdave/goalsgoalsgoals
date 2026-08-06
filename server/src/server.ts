@@ -705,6 +705,7 @@ const GAMEWEEK_PROJECTION: Record<string, 0 | 1> = {
   'fixture.venue.name': 1,
   'league.id': 1,
   'league.name': 1,
+  'league.country': 1,
   'league.round': 1,
   'teams.home.id': 1,
   'teams.home.name': 1,
@@ -1429,9 +1430,12 @@ app.get('/api/standings', async (req: Request, res: Response) => {
       const form: string[] = [];
       const gameweeks: number[] = [];
 
+      let PL = 0;
+
       userSelections.forEach(selection => {
         const fixtureData = fixtureMap.get(selection.fixtureId);
         if (fixtureData) {
+          PL++;
           totalGoals += fixtureData.totalGoals;
           form.push(fixtureData.result);
           
@@ -1447,7 +1451,6 @@ app.get('/api/standings', async (req: Request, res: Response) => {
         }
       });
 
-      const PL = userSelections.length; // Played (games selected)
       const points = (GGG * 3) + (G0 * 1) + (Z0 * -1);
       const ppg = PL > 0 ? points / PL : 0;
 

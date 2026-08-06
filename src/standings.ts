@@ -77,6 +77,8 @@ function renderGroup(container: HTMLElement, groupName: string, users: StandingE
   const table = document.createElement('table');
   table.className = 'striped responsive-table';
   table.style.marginBottom = '1rem';
+  table.style.width = '100%';
+  table.style.tableLayout = 'fixed';
 
   const thead = document.createElement('thead');
   thead.innerHTML = '<tr><th></th><th>Name</th><th>PL</th><th>GGG</th><th>G-0</th><th>0-0</th><th>GF</th><th>Pts</th><th>PPG</th><th>Form</th></tr>';
@@ -126,7 +128,9 @@ function renderTotals(container: HTMLElement, allUsers: StandingEntry[]): void {
   wrapper.style.marginTop = '0.5rem';
 
   const table = document.createElement('table');
-  table.className = 'striped';
+  table.className = 'striped responsive-table';
+  table.style.width = '100%';
+  table.style.tableLayout = 'fixed';
   table.innerHTML = `<thead><tr><th></th><th>Totals</th><th>PL</th><th>GGG</th><th>G-0</th><th>0-0</th><th>GF</th><th>Pts</th><th>PPG</th><th></th></tr></thead>`;
 
   const tbody = document.createElement('tbody');
@@ -198,20 +202,48 @@ function seasonLabel(year: number): string {
 function renderStandingsTable(container: HTMLElement, standings: StandingEntry[]): void {
   container.innerHTML = '';
   if (standings.length === 0) {
-      const opt = document.createElement('option');
-      opt.value = String(yr);
-      opt.textContent = seasonLabel(yr);
-      if (yr === activeSeason) opt.selected = true;
-      select.appendChild(opt);
-    });
-    const label = document.createElement('label');
-    label.htmlFor = 'standings-season-select';
-    label.textContent = 'Season';
-    selectorContainer.appendChild(select);
-    selectorContainer.appendChild(label);
-    // Initialise Materialize select
-    if (typeof M !== 'undefined') M.FormSelect.init(select);
-    selectorEl = select;
+    container.innerHTML = '<p class="grey-text">No standings data available for this season yet.</p>';
+    return;
+  }
+  const groups: Record<string, StandingEntry[]> = {};
+  standings.forEach(u => {
+    const groupName = u.league || 'Unassigned';
+    groups[groupName] = groups[groupName] || [];
+    groups[groupName].push(u);
+  });
+  Object.keys(groups).sort().forEach(g => {
+    renderGroup(container, g, groups[g]);
+    const hr = document.createElement('hr');
+    hr.style.cssText = 'border:none;border-top:1px dashed #999;margin:8px 0 16px 0;';
+    container.appendChild(hr);
+  });
+  renderTotals(container, standings);
+}
+
+async function init(): Promise<void> {
+  const root = document.getElementById('leagues-root');
+  if (!root) return;
+
+  root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
+
+  // Fetch default (current) season first to get available seasons list
+  const initialData = await fetchStandings();
+
+  if (!initialData) {
+    root.innerHTML = '<p class="grey-text">No standings data available yet. Match selections need to be completed.</p>';
+    return;
+  }
+
+  root.innerHTML = '';
+
+  const availableSeasons = initialData.availableSeasons || [];
+  let activeSeason = initialData.season ?? null;
+
+  // Render a season selector when a container is present for it.
+  let selectorEl: HTMLSelectElement | null = null;
+  const selectorContainer = document.getElementById('standings-season-selector');
+  if (selectorContainer) {
+    selectorEl = renderSeasonSelector(selectorContainer, availableSeasons, activeSeason);
   }
 
   const tableContainer = document.createElement('div');

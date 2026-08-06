@@ -124,6 +124,7 @@ export interface FixtureInfo {
 export interface LeagueInfo {
   id: number;
   name: string;
+  country?: string;
   round: string;
   season?: number;
 }
