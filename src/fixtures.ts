@@ -32,6 +32,12 @@ import type {
   const _currentSeason = String(_now.getMonth() >= 7 ? _now.getFullYear() : _now.getFullYear() - 1);
   let selectedSeason = _currentSeason;
 
+  function seasonLabel(startYear: string): string {
+    const y = parseInt(startYear, 10);
+    if (isNaN(y)) return startYear;
+    return `${y}/${String(y + 1).slice(2)} Season`;
+  }
+
   function getToken(): string | null {
     return sessionStorage.getItem('ggg_token');
   }
@@ -449,6 +455,16 @@ import type {
 
     const seasonSelector = document.getElementById('season-selector') as HTMLSelectElement | null;
     if (seasonSelector) {
+      // Keep selector future-proof: if HTML options were not updated for the new
+      // football year, inject the computed current season dynamically.
+      const hasCurrentSeasonOption = Array.from(seasonSelector.options).some(o => o.value === selectedSeason);
+      if (!hasCurrentSeasonOption) {
+        const option = document.createElement('option');
+        option.value = selectedSeason;
+        option.textContent = seasonLabel(selectedSeason);
+        seasonSelector.appendChild(option);
+      }
+
       // Sync the dropdown to whichever season was computed as current
       seasonSelector.value = selectedSeason;
       M.FormSelect.init(seasonSelector);
