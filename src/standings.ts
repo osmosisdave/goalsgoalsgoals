@@ -201,13 +201,18 @@ function seasonLabel(year: number): string {
 
 function renderStandingsTable(container: HTMLElement, standings: StandingEntry[]): void {
   container.innerHTML = '';
-  if (standings.length === 0) {
+  const assignedStandings = standings.filter(u => {
+    const league = (u.league || '').trim();
+    return league.length > 0 && league !== 'Unassigned';
+  });
+
+  if (assignedStandings.length === 0) {
     container.innerHTML = '<p class="grey-text">No standings data available for this season yet.</p>';
     return;
   }
   const groups: Record<string, StandingEntry[]> = {};
-  standings.forEach(u => {
-    const groupName = u.league || 'Unassigned';
+  assignedStandings.forEach(u => {
+    const groupName = u.league as string;
     groups[groupName] = groups[groupName] || [];
     groups[groupName].push(u);
   });
@@ -217,7 +222,7 @@ function renderStandingsTable(container: HTMLElement, standings: StandingEntry[]
     hr.style.cssText = 'border:none;border-top:1px dashed #999;margin:8px 0 16px 0;';
     container.appendChild(hr);
   });
-  renderTotals(container, standings);
+  renderTotals(container, assignedStandings);
 }
 
 async function init(): Promise<void> {
