@@ -67,6 +67,8 @@ function renderGroup(container, groupName, users) {
     const table = document.createElement('table');
     table.className = 'striped responsive-table';
     table.style.marginBottom = '1rem';
+    table.style.width = '100%';
+    table.style.tableLayout = 'fixed';
     const thead = document.createElement('thead');
     thead.innerHTML = '<tr><th></th><th>Name</th><th>PL</th><th>GGG</th><th>G-0</th><th>0-0</th><th>GF</th><th>Pts</th><th>PPG</th><th>Form</th></tr>';
     table.appendChild(thead);
@@ -106,7 +108,9 @@ function renderTotals(container, allUsers) {
     const wrapper = document.createElement('div');
     wrapper.style.marginTop = '0.5rem';
     const table = document.createElement('table');
-    table.className = 'striped';
+    table.className = 'striped responsive-table';
+    table.style.width = '100%';
+    table.style.tableLayout = 'fixed';
     table.innerHTML = `<thead><tr><th></th><th>Totals</th><th>PL</th><th>GGG</th><th>G-0</th><th>0-0</th><th>GF</th><th>Pts</th><th>PPG</th><th></th></tr></thead>`;
     const tbody = document.createElement('tbody');
     const tr = document.createElement('tr');
@@ -120,6 +124,47 @@ function renderTotals(container, allUsers) {
     table.appendChild(tbody);
     wrapper.appendChild(table);
     container.appendChild(wrapper);
+}
+function buildSeasonOptions(select, availableSeasons, activeSeason) {
+    const seen = new Set();
+    const options = Array.from(select.options);
+    options.forEach(option => seen.add(option.value));
+    const seasonCandidates = [...availableSeasons];
+    if (activeSeason != null && !seen.has(String(activeSeason))) {
+        seasonCandidates.unshift(activeSeason);
+    }
+    seasonCandidates.forEach(year => {
+        const value = String(year);
+        if (seen.has(value))
+            return;
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = seasonLabel(year);
+        if (activeSeason != null && year === activeSeason)
+            opt.selected = true;
+        select.appendChild(opt);
+        seen.add(value);
+    });
+    if (activeSeason != null) {
+        const selected = Array.from(select.options).find(option => option.value === String(activeSeason));
+        if (selected)
+            selected.selected = true;
+    }
+}
+function renderSeasonSelector(container, availableSeasons, activeSeason) {
+    if (availableSeasons.length === 0 && activeSeason == null)
+        return null;
+    const select = document.createElement('select');
+    select.id = 'standings-season-select';
+    buildSeasonOptions(select, availableSeasons, activeSeason);
+    const label = document.createElement('label');
+    label.htmlFor = 'standings-season-select';
+    label.textContent = 'Season';
+    container.appendChild(select);
+    container.appendChild(label);
+    if (typeof M !== 'undefined')
+        M.FormSelect.init(select);
+    return select;
 }
 // ----- Entry point -----
 function seasonLabel(year) {
@@ -160,30 +205,11 @@ async function init() {
     root.innerHTML = '';
     const availableSeasons = initialData.availableSeasons || [];
     let activeSeason = (_a = initialData.season) !== null && _a !== void 0 ? _a : null;
-    // Only render a season selector on the full leagues page (not the home widget)
-    const isLeaguesPage = !!document.getElementById('standings-season-selector');
+    // Render a season selector when a container is present for it.
     let selectorEl = null;
-    if (isLeaguesPage && availableSeasons.length > 1) {
-        const selectorContainer = document.getElementById('standings-season-selector');
-        const select = document.createElement('select');
-        select.id = 'standings-season-select';
-        availableSeasons.forEach(yr => {
-            const opt = document.createElement('option');
-            opt.value = String(yr);
-            opt.textContent = seasonLabel(yr);
-            if (yr === activeSeason)
-                opt.selected = true;
-            select.appendChild(opt);
-        });
-        const label = document.createElement('label');
-        label.htmlFor = 'standings-season-select';
-        label.textContent = 'Season';
-        selectorContainer.appendChild(select);
-        selectorContainer.appendChild(label);
-        // Initialise Materialize select
-        if (typeof M !== 'undefined')
-            M.FormSelect.init(select);
-        selectorEl = select;
+    const selectorContainer = document.getElementById('standings-season-selector');
+    if (selectorContainer) {
+        selectorEl = renderSeasonSelector(selectorContainer, availableSeasons, activeSeason);
     }
     const tableContainer = document.createElement('div');
     root.appendChild(tableContainer);

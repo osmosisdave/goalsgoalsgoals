@@ -16,6 +16,21 @@
     const _now = new Date();
     const _currentSeason = String(_now.getMonth() >= 7 ? _now.getFullYear() : _now.getFullYear() - 1);
     let selectedSeason = _currentSeason;
+    const SCOTTISH_LEAGUE_IDS = new Set([179, 180, 181, 182, 183, 184, 185]);
+    function formatLeagueLabel(name, country, id) {
+        const trimmedCountry = (country || '').trim();
+        if (trimmedCountry)
+            return `${name} (${trimmedCountry})`;
+        if (SCOTTISH_LEAGUE_IDS.has(id))
+            return `${name} (Scotland)`;
+        return name;
+    }
+    function seasonLabel(startYear) {
+        const y = parseInt(startYear, 10);
+        if (isNaN(y))
+            return startYear;
+        return `${y}/${String(y + 1).slice(2)} Season`;
+    }
     function getToken() {
         return sessionStorage.getItem('ggg_token');
     }
@@ -413,6 +428,15 @@
         root.innerHTML = '<div class="progress"><div class="indeterminate"></div></div>';
         const seasonSelector = document.getElementById('season-selector');
         if (seasonSelector) {
+            // Keep selector future-proof: if HTML options were not updated for the new
+            // football year, inject the computed current season dynamically.
+            const hasCurrentSeasonOption = Array.from(seasonSelector.options).some(o => o.value === selectedSeason);
+            if (!hasCurrentSeasonOption) {
+                const option = document.createElement('option');
+                option.value = selectedSeason;
+                option.textContent = seasonLabel(selectedSeason);
+                seasonSelector.appendChild(option);
+            }
             // Sync the dropdown to whichever season was computed as current
             seasonSelector.value = selectedSeason;
             M.FormSelect.init(seasonSelector);
@@ -477,10 +501,14 @@
             const leagueSelect = document.createElement('select');
             leagueSelect.className = 'browser-default';
             leagueSelect.style.marginTop = '4px';
-            const leagues = [...new Set(allFixtures.map(f => JSON.stringify({ id: f.league.id, name: f.league.name })))]
+            const leagues = [...new Set(allFixtures.map(f => JSON.stringify({
+                    id: f.league.id,
+                    name: f.league.name,
+                    country: f.league.country,
+                })))]
                 .map(s => JSON.parse(s));
             leagueSelect.innerHTML = '<option value="all">All Leagues</option>' +
-                leagues.map(l => `<option value="${l.id}" ${selectedLeague === String(l.id) ? 'selected' : ''}>${l.name}</option>`).join('');
+                leagues.map(l => `<option value="${l.id}" ${selectedLeague === String(l.id) ? 'selected' : ''}>${formatLeagueLabel(l.name, l.country, l.id)}</option>`).join('');
             leagueSelect.addEventListener('change', (e) => {
                 selectedLeague = e.target.value;
                 selectedTeam = 'all'; // reset team filter when league changes

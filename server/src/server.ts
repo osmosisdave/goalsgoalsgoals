@@ -705,6 +705,7 @@ const GAMEWEEK_PROJECTION: Record<string, 0 | 1> = {
   'fixture.venue.name': 1,
   'league.id': 1,
   'league.name': 1,
+  'league.country': 1,
   'league.round': 1,
   'teams.home.id': 1,
   'teams.home.name': 1,
@@ -1385,13 +1386,12 @@ app.get('/api/standings', async (req: Request, res: Response) => {
       'fixture.status.short': 'FT'
     }).toArray();
 
-    // Derive available seasons from the finished fixtures that have selections
-    const seasonSet = new Set<number>();
-    allFinishedFixtures.forEach(f => {
-      const s = f.league?.season;
-      if (typeof s === 'number') seasonSet.add(s);
-    });
-    const availableSeasons: number[] = Array.from(seasonSet).sort((a, b) => b - a);
+    // Derive available seasons from fixture data so the league table can switch
+    // between seasons even before there are completed selections for that year.
+    const seasonsFromFixtures = await db.collection('fixtures').distinct('league.season');
+    const distinctSeasons = seasonsFromFixtures
+      .filter((season): season is number => typeof season === 'number' && !Number.isNaN(season))
+      .sort((a, b) => b - a);
 
     // Filter fixtures to the requested season
     const fixtures = allFinishedFixtures.filter(f => f.league?.season === seasonFilter);
@@ -1430,9 +1430,12 @@ app.get('/api/standings', async (req: Request, res: Response) => {
       const form: string[] = [];
       const gameweeks: number[] = [];
 
+      let PL = 0;
+
       userSelections.forEach(selection => {
         const fixtureData = fixtureMap.get(selection.fixtureId);
         if (fixtureData) {
+          PL++;
           totalGoals += fixtureData.totalGoals;
           form.push(fixtureData.result);
           
@@ -1448,7 +1451,6 @@ app.get('/api/standings', async (req: Request, res: Response) => {
         }
       });
 
-      const PL = userSelections.length; // Played (games selected)
       const points = (GGG * 3) + (G0 * 1) + (Z0 * -1);
       const ppg = PL > 0 ? points / PL : 0;
 
@@ -1476,7 +1478,7 @@ app.get('/api/standings', async (req: Request, res: Response) => {
     res.json({
       success: true,
       season: seasonFilter,
-      availableSeasons,
+      availableSeasons: distinctSeasons,
       standings: userStats
     });
   } catch (error: any) {
