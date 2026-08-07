@@ -883,9 +883,9 @@ app.get('/api/gameweek/current', async (req: Request, res: Response) => {
       return res.json({ gameweek: null, players: [] });
     }
 
-    // Get all non-admin users
+    // Get all non-admin users who are assigned to a league
     const users = await db.collection('users')
-      .find({ role: { $ne: 'admin' } }, { projection: { username: 1 } })
+      .find({ role: { $ne: 'admin' }, league: { $exists: true, $ne: null, $nin: ['', 'Unassigned'] } }, { projection: { username: 1 } })
       .sort({ username: 1 })
       .toArray();
 
