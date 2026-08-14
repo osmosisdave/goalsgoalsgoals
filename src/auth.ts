@@ -1,4 +1,12 @@
-import type { MeResponse, LoginResponse, CreateUserResponse, UserRecord } from './api-types';
+import type {
+  MeResponse,
+  LoginResponse,
+  CreateUserResponse,
+  UserRecord,
+  AssignPreviousMatchResponse,
+  Fixture,
+  FixturesDbResponse,
+} from './api-types';
 
 /**
  * Client-side auth module (connects to a simple server-side auth API).
@@ -69,6 +77,50 @@ export async function createUser(username: string, password: string, role = 'use
     throw new Error(err.error || 'Failed to create user');
   }
   return await res.json();
+}
+
+export async function assignPreviousMatch(username: string, fixtureId: number): Promise<AssignPreviousMatchResponse> {
+  const token = getToken();
+  if (!token) throw new Error('Not authenticated');
+  const res = await fetch(apiUrl('/api/admin/assign-previous-match'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ username, fixtureId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || 'Failed to assign previous match');
+  }
+  return await res.json();
+}
+
+function currentSeasonYear(): number {
+  const now = new Date();
+  return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+function fixtureOptionLabel(f: Fixture): string {
+  const date = new Date(f.fixture.date).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  });
+  const home = f.teams?.home?.name || 'Home';
+  const away = f.teams?.away?.name || 'Away';
+  const league = f.league?.name || 'League';
+  const round = f.league?.round ? ` — ${f.league.round}` : '';
+  const score = (f.goals?.home != null && f.goals?.away != null)
+    ? ` (${f.goals.home}-${f.goals.away})`
+    : '';
+  return `${home} vs ${away}${score} • ${league}${round} • ${date}`;
+}
+
+async function fetchFinishedFixtures(season: number): Promise<Fixture[]> {
+  const res = await fetch(apiUrl(`/api/football/fixtures?season=${season}&status=FT`));
+  if (!res.ok) throw new Error('Failed to load finished fixtures');
+  const data: FixturesDbResponse = await res.json();
+  return (data.response || []) as Fixture[];
 }
 
 // UI wiring for login.html and admin.html (calls server endpoints)
@@ -145,6 +197,76 @@ document.addEventListener('DOMContentLoaded', () => {
               });
         } catch (e: any) {
           if (msg) { msg.textContent = e.message || 'Error'; msg.className = 'red-text'; }
+        }
+      });
+    }
+
+    const assignForm = document.getElementById('assignPreviousMatchForm') as HTMLFormElement | null;
+    if (assignForm) {
+      const assignSeasonInput = document.getElementById('assignSeason') as HTMLInputElement | null;
+      const assignFixtureSelect = document.getElementById('assignFixtureSelect') as HTMLSelectElement | null;
+      const refreshAssignFixturesBtn = document.getElementById('refreshAssignFixturesBtn') as HTMLButtonElement | null;
+      const msg = document.getElementById('assignPreviousMatchMsg');
+
+      const loadAssignableFixtures = async (): Promise<void> => {
+        if (!assignSeasonInput || !assignFixtureSelect) return;
+        const season = parseInt(assignSeasonInput.value, 10);
+        if (Number.isNaN(season)) {
+          assignFixtureSelect.innerHTML = '<option value="">Enter a valid season first</option>';
+          return;
+        }
+
+        assignFixtureSelect.disabled = true;
+        assignFixtureSelect.innerHTML = '<option value="">Loading finished fixtures…</option>';
+        if (refreshAssignFixturesBtn) refreshAssignFixturesBtn.disabled = true;
+
+        try {
+          const fixtures = await fetchFinishedFixtures(season);
+          const recent = fixtures.slice(-300).reverse();
+          if (recent.length === 0) {
+            assignFixtureSelect.innerHTML = '<option value="">No finished fixtures found for this season</option>';
+            if (msg) { msg.textContent = 'No finished fixtures found for selected season.'; msg.className = 'orange-text'; }
+            return;
+          }
+
+          assignFixtureSelect.innerHTML = '<option value="">Select a finished fixture</option>' +
+            recent.map(f => `<option value="${f.fixture.id}">${fixtureOptionLabel(f)}</option>`).join('');
+          if (msg) msg.textContent = '';
+        } catch (e: any) {
+          assignFixtureSelect.innerHTML = '<option value="">Failed to load fixtures</option>';
+          if (msg) { msg.textContent = e.message || 'Failed to load fixtures'; msg.className = 'red-text'; }
+        } finally {
+          assignFixtureSelect.disabled = false;
+          if (refreshAssignFixturesBtn) refreshAssignFixturesBtn.disabled = false;
+        }
+      };
+
+      if (assignSeasonInput) {
+        assignSeasonInput.value = String(currentSeasonYear());
+      }
+      void loadAssignableFixtures();
+
+      if (refreshAssignFixturesBtn) {
+        refreshAssignFixturesBtn.addEventListener('click', () => {
+          void loadAssignableFixtures();
+        });
+      }
+
+      assignForm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const username = (document.getElementById('assignUsername') as HTMLInputElement).value.trim();
+        const fixtureId = parseInt((document.getElementById('assignFixtureSelect') as HTMLSelectElement).value, 10);
+
+        if (!username || Number.isNaN(fixtureId)) {
+          if (msg) { msg.textContent = 'Please provide valid username and select a finished fixture.'; msg.className = 'red-text'; }
+          return;
+        }
+
+        try {
+          const result = await assignPreviousMatch(username, fixtureId);
+          if (msg) { msg.textContent = result.message || 'Assigned.'; msg.className = 'green-text'; }
+        } catch (e: any) {
+          if (msg) { msg.textContent = e.message || 'Error assigning previous match'; msg.className = 'red-text'; }
         }
       });
     }
