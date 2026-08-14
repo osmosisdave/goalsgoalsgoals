@@ -101,21 +101,22 @@
                 <input id="assignSeason" type="number" min="2000" max="2100" required>
                 <label for="assignSeason">Season</label>
               </div>
-              <div class="input-field col s12 m4">
-                <select id="assignFixtureSelect" class="browser-default" required>
-                  <option value="">Loading finished fixtures…</option>
-                </select>
-              </div>
-              <div class="col s12 m2" style="display:flex; align-items:center; min-height:72px; gap:8px;">
-                <button id="refreshAssignFixturesBtn" class="btn-flat waves-effect" type="button" title="Reload fixture list for selected season" style="padding:0 10px;">
-                  <i class="material-icons">refresh</i>
-                </button>
-                <button class="btn waves-effect waves-light" type="submit" style="width:100%;">
-                  <i class="material-icons left">playlist_add</i>Assign
-                </button>
+              <div class="input-field col s12 m6">
+                <input id="assignTeamSearch" type="text" placeholder="Search by team name...">
+                <label for="assignTeamSearch">Search Finished Matches (by team)</label>
               </div>
               <div class="col s12">
-                <span id="assignPreviousMatchMsg"></span>
+                <div id="assignFixtureResults" style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; display: none;">
+                  <div id="assignFixtureList"></div>
+                </div>
+                <input type="hidden" id="assignFixtureSelect" required>
+                <span id="assignFixtureInfo" style="display: block; margin-top: 8px; font-size: 0.9em; color: #666;"></span>
+              </div>
+              <div class="col s12">
+                <button class="btn waves-effect waves-light" type="submit">
+                  <i class="material-icons left">playlist_add</i>Assign
+                </button>
+                <span id="assignPreviousMatchMsg" style="margin-left: 15px;"></span>
               </div>
             </form>
           </div>

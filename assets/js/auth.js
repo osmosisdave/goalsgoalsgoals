@@ -85,6 +85,31 @@ export async function assignPreviousMatch(username, fixtureId) {
     }
     return await res.json();
 }
+function currentSeasonYear() {
+    const now = new Date();
+    return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+}
+function fixtureOptionLabel(f) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const date = new Date(f.fixture.date).toLocaleDateString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric'
+    });
+    const home = ((_b = (_a = f.teams) === null || _a === void 0 ? void 0 : _a.home) === null || _b === void 0 ? void 0 : _b.name) || 'Home';
+    const away = ((_d = (_c = f.teams) === null || _c === void 0 ? void 0 : _c.away) === null || _d === void 0 ? void 0 : _d.name) || 'Away';
+    const league = ((_e = f.league) === null || _e === void 0 ? void 0 : _e.name) || 'League';
+    const round = ((_f = f.league) === null || _f === void 0 ? void 0 : _f.round) ? ` — ${f.league.round}` : '';
+    const score = (((_g = f.goals) === null || _g === void 0 ? void 0 : _g.home) != null && ((_h = f.goals) === null || _h === void 0 ? void 0 : _h.away) != null)
+        ? ` (${f.goals.home}-${f.goals.away})`
+        : '';
+    return `${home} vs ${away}${score} • ${league}${round} • ${date}`;
+}
+async function fetchFinishedFixtures(season) {
+    const res = await fetch(apiUrl(`/api/football/fixtures?season=${season}&status=FT`));
+    if (!res.ok)
+        throw new Error('Failed to load finished fixtures');
+    const data = await res.json();
+    return (data.response || []);
+}
 // UI wiring for login.html and admin.html (calls server endpoints)
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('loginForm');
@@ -173,14 +198,127 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const assignForm = document.getElementById('assignPreviousMatchForm');
         if (assignForm) {
+            const assignSeasonInput = document.getElementById('assignSeason');
+            const assignTeamSearch = document.getElementById('assignTeamSearch');
+            const assignFixtureSelect = document.getElementById('assignFixtureSelect');
+            const assignFixtureResults = document.getElementById('assignFixtureResults');
+            const assignFixtureList = document.getElementById('assignFixtureList');
+            const assignFixtureInfo = document.getElementById('assignFixtureInfo');
+            const msg = document.getElementById('assignPreviousMatchMsg');
+            let allFixtures = [];
+            const loadAssignableFixtures = async () => {
+                if (!assignSeasonInput)
+                    return;
+                const season = parseInt(assignSeasonInput.value, 10);
+                if (Number.isNaN(season)) {
+                    if (assignFixtureResults)
+                        assignFixtureResults.style.display = 'none';
+                    if (assignFixtureInfo)
+                        assignFixtureInfo.textContent = 'Enter a valid season first';
+                    return;
+                }
+                if (assignTeamSearch)
+                    assignTeamSearch.value = '';
+                if (assignFixtureSelect)
+                    assignFixtureSelect.value = '';
+                if (assignFixtureInfo)
+                    assignFixtureInfo.textContent = 'Loading finished fixtures…';
+                try {
+                    allFixtures = await fetchFinishedFixtures(season);
+                    if (allFixtures.length === 0) {
+                        if (assignFixtureResults)
+                            assignFixtureResults.style.display = 'none';
+                        if (assignFixtureInfo)
+                            assignFixtureInfo.textContent = 'No finished fixtures found for this season.';
+                        if (msg) {
+                            msg.textContent = '';
+                            msg.className = '';
+                        }
+                    }
+                    else {
+                        if (assignFixtureInfo)
+                            assignFixtureInfo.textContent = `${allFixtures.length} finished fixtures loaded. Search by team name.`;
+                    }
+                }
+                catch (e) {
+                    allFixtures = [];
+                    if (assignFixtureResults)
+                        assignFixtureResults.style.display = 'none';
+                    if (assignFixtureInfo)
+                        assignFixtureInfo.textContent = e.message || 'Failed to load fixtures';
+                    if (msg) {
+                        msg.textContent = e.message || 'Failed to load fixtures';
+                        msg.className = 'red-text';
+                    }
+                }
+            };
+            const filterAndShowFixtures = () => {
+                if (!assignTeamSearch || !assignFixtureList || !assignFixtureResults || !assignFixtureInfo)
+                    return;
+                const searchTerm = assignTeamSearch.value.toLowerCase().trim();
+                if (!searchTerm) {
+                    assignFixtureResults.style.display = 'none';
+                    assignFixtureInfo.textContent = allFixtures.length > 0
+                        ? `${allFixtures.length} finished fixtures loaded. Search by team name.`
+                        : 'No finished fixtures loaded.';
+                    return;
+                }
+                const filtered = allFixtures.filter(f => f.teams.home.name.toLowerCase().includes(searchTerm) ||
+                    f.teams.away.name.toLowerCase().includes(searchTerm));
+                if (filtered.length === 0) {
+                    assignFixtureList.innerHTML = '<div style="padding: 12px; text-align: center; color: #999;">No matches found for "' + searchTerm + '"</div>';
+                    assignFixtureResults.style.display = 'block';
+                    return;
+                }
+                assignFixtureList.innerHTML = filtered.slice(0, 50).map(f => {
+                    const label = fixtureOptionLabel(f);
+                    return `<div style="padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; hover: background #f5f5f5;" data-fixture-id="${f.fixture.id}" data-fixture-label="${label}">
+            ${label}
+          </div>`;
+                }).join('');
+                assignFixtureResults.style.display = 'block';
+                // Add click handlers to results
+                const resultItems = assignFixtureList.querySelectorAll('[data-fixture-id]');
+                resultItems.forEach(item => {
+                    item.addEventListener('click', () => {
+                        const fixtureId = item.getAttribute('data-fixture-id');
+                        const fixtureLabel = item.getAttribute('data-fixture-label');
+                        if (assignFixtureSelect && fixtureId) {
+                            assignFixtureSelect.value = fixtureId;
+                        }
+                        if (assignFixtureInfo && fixtureLabel) {
+                            assignFixtureInfo.textContent = 'Selected: ' + fixtureLabel;
+                        }
+                        assignFixtureResults.style.display = 'none';
+                        if (assignTeamSearch)
+                            assignTeamSearch.value = '';
+                    });
+                });
+            };
+            if (assignSeasonInput) {
+                assignSeasonInput.value = String(currentSeasonYear());
+            }
+            void loadAssignableFixtures();
+            if (assignSeasonInput) {
+                assignSeasonInput.addEventListener('change', () => {
+                    void loadAssignableFixtures();
+                });
+            }
+            if (assignTeamSearch) {
+                assignTeamSearch.addEventListener('input', filterAndShowFixtures);
+                assignTeamSearch.addEventListener('focus', () => {
+                    if (assignTeamSearch.value.length > 0) {
+                        filterAndShowFixtures();
+                    }
+                });
+            }
             assignForm.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
                 const username = document.getElementById('assignUsername').value.trim();
-                const fixtureId = parseInt(document.getElementById('assignFixtureId').value, 10);
-                const msg = document.getElementById('assignPreviousMatchMsg');
+                const fixtureId = parseInt(assignFixtureSelect.value, 10);
                 if (!username || Number.isNaN(fixtureId)) {
                     if (msg) {
-                        msg.textContent = 'Please provide valid username and fixture ID.';
+                        msg.textContent = 'Please provide valid username and select a finished fixture.';
                         msg.className = 'red-text';
                     }
                     return;

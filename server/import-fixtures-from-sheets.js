@@ -83,6 +83,16 @@ function parseGoal(val) {
   return isNaN(n) ? null : n;
 }
 
+function buildFixtureNaturalKeyFilter(fixture) {
+  return {
+    'league.season': fixture.league.season,
+    'league.id': fixture.league.id,
+    'league.round': fixture.league.round,
+    'teams.home.name': fixture.teams.home.name,
+    'teams.away.name': fixture.teams.away.name,
+  };
+}
+
 // ── Sheet → Fixture mapping ───────────────────────────────────────────────────
 
 /**
@@ -277,9 +287,32 @@ async function upsertFixtures(fixtures) {
   let updatedCount = 0;
 
   for (const fixture of fixtures) {
+    const naturalKeyFilter = buildFixtureNaturalKeyFilter(fixture);
+    const existing = await collection.findOne(
+      {
+        $or: [
+          { 'fixture.id': fixture.fixture.id },
+          naturalKeyFilter,
+        ],
+      },
+      {
+        projection: { _id: 0, 'fixture.id': 1 },
+      }
+    );
+
+    const fixtureToPersist = existing && existing.fixture && existing.fixture.id
+      ? {
+          ...fixture,
+          fixture: {
+            ...fixture.fixture,
+            id: existing.fixture.id,
+          },
+        }
+      : fixture;
+
     const result = await collection.updateOne(
-      { 'fixture.id': fixture.fixture.id },
-      { $set: fixture },
+      { 'fixture.id': fixtureToPersist.fixture.id },
+      { $set: fixtureToPersist },
       { upsert: true }
     );
     if (result.upsertedCount > 0) newCount++;
