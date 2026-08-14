@@ -54,7 +54,7 @@
     }
     async function fetchSelections() {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/matches/selections`);
+            const response = await fetch(`${API_BASE_URL}/api/matches/selections?season=${selectedSeason}&includeHistory=true`);
             if (response.ok) {
                 const data = await response.json();
                 matchSelections = {};

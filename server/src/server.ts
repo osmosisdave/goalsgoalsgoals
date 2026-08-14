@@ -1180,7 +1180,31 @@ app.get('/api/matches/selections', async (req: Request, res: Response) => {
     }
 
     const db = mongoClient.db('goalsgoalsgoals');
-    const selections = await db.collection('match_selections').find({}).toArray();
+    const requestedSeason = req.query.season ? parseInt(req.query.season as string, 10) : null;
+    const includeHistory = req.query.includeHistory === 'true';
+
+    const activeQuery: any = {};
+    if (requestedSeason !== null && !Number.isNaN(requestedSeason)) {
+      activeQuery.season = requestedSeason;
+    }
+
+    const activeSelections = await db.collection('match_selections').find(activeQuery).toArray();
+
+    let selections = activeSelections;
+    if (includeHistory) {
+      const historyQuery: any = {};
+      if (requestedSeason !== null && !Number.isNaN(requestedSeason)) {
+        historyQuery.season = requestedSeason;
+      }
+      const historySelections = await db.collection('match_selection_history').find(historyQuery).toArray();
+
+      // Merge by fixtureId so fixtures can still display a picker on finished games,
+      // while current active selections always win when both exist.
+      const byFixtureId = new Map<number, any>();
+      for (const s of historySelections) byFixtureId.set(s.fixtureId, s);
+      for (const s of activeSelections) byFixtureId.set(s.fixtureId, s);
+      selections = Array.from(byFixtureId.values());
+    }
 
     res.json({
       success: true,
@@ -1203,16 +1227,29 @@ app.get('/api/matches/stealable', async (req: Request, res: Response) => {
     const season = req.query.season ? parseInt(req.query.season as string) : currentSeasonYear();
     const db = mongoClient.db('goalsgoalsgoals');
 
-    const dates = await buildQualifyingDates(db, season);
+    const groups = await buildGameweekFixtures(db, season, { 'fixture.id': 1, 'fixture.date': 1, _id: 0 });
+    const dates = groups.map(g => g.date);
     const { currentDate, prevDate } = getCurrentAndPrevGWDates(dates);
 
     if (!currentDate || !prevDate) {
       return res.json({ stealableFixtureIds: [] });
     }
 
+    const currentIdx = dates.indexOf(currentDate);
+    const prevIdx = dates.indexOf(prevDate);
+    if (currentIdx < 0 || prevIdx < 0) {
+      return res.json({ stealableFixtureIds: [] });
+    }
+
+    const currentFixtureIds = new Set<number>(groups[currentIdx].fixtures.map((f: any) => f.fixture.id));
+    const prevFixtureIds = new Set<number>(groups[prevIdx].fixtures.map((f: any) => f.fixture.id));
+    if (currentFixtureIds.size === 0 || prevFixtureIds.size === 0) {
+      return res.json({ stealableFixtureIds: [] });
+    }
+
     // All selections in the current gameweek
     const currentSelections = await db.collection('match_selections')
-      .find({ date: { $regex: `^${currentDate}` } })
+      .find({ season, fixtureId: { $in: Array.from(currentFixtureIds) } })
       .toArray();
 
     if (currentSelections.length === 0) {
@@ -1222,22 +1259,26 @@ app.get('/api/matches/stealable', async (req: Request, res: Response) => {
     // Previous gameweek archived picks for the same users
     const usernames = currentSelections.map((s: any) => s.username);
     const prevSelections = await db.collection('match_selection_history')
-      .find({ username: { $in: usernames }, date: { $regex: `^${prevDate}` } })
+      .find({ username: { $in: usernames }, fixtureId: { $in: Array.from(prevFixtureIds) } })
       .toArray();
 
-    // username → { home, away } of previous pick
-    const prevTeamsByUser: Record<string, { home: string; away: string }> = {};
+    // username → list of previous picks in the previous gameweek
+    const prevTeamsByUser: Record<string, Array<{ home: string; away: string }>> = {};
     for (const s of prevSelections) {
-      prevTeamsByUser[s.username] = { home: s.homeTeam, away: s.awayTeam };
+      if (!prevTeamsByUser[s.username]) prevTeamsByUser[s.username] = [];
+      prevTeamsByUser[s.username].push({ home: s.homeTeam, away: s.awayTeam });
     }
 
     // A pick is stealable when any team from the previous pick appears in the current pick
     const stealableFixtureIds: number[] = [];
     for (const s of currentSelections) {
-      const prev = prevTeamsByUser[s.username];
-      if (!prev) continue;
-      const prevTeams = new Set([prev.home, prev.away]);
-      if (prevTeams.has(s.homeTeam) || prevTeams.has(s.awayTeam)) {
+      const prevList = prevTeamsByUser[s.username];
+      if (!prevList || prevList.length === 0) continue;
+      const repeated = prevList.some(prev => {
+        const prevTeams = new Set([prev.home, prev.away]);
+        return prevTeams.has(s.homeTeam) || prevTeams.has(s.awayTeam);
+      });
+      if (repeated) {
         stealableFixtureIds.push(s.fixtureId);
       }
     }
@@ -1305,29 +1346,40 @@ app.post('/api/matches/:fixtureId/steal', requireAuth, async (req: Request, res:
 
     // Confirm we are in the current (unlocked) gameweek
     const season: number = targetSelection.season || currentSeasonYear();
-    const dates = await buildQualifyingDates(db, season);
+    const groups = await buildGameweekFixtures(db, season, { 'fixture.id': 1, 'fixture.date': 1, _id: 0 });
+    const dates = groups.map(g => g.date);
     const { currentDate, prevDate } = getCurrentAndPrevGWDates(dates);
 
     if (!currentDate) {
       return res.status(400).json({ error: 'Bad request', message: 'No active gameweek' });
     }
-    if (!targetSelection.date.startsWith(currentDate)) {
+    const currentIdx = dates.indexOf(currentDate);
+    const prevIdx = prevDate ? dates.indexOf(prevDate) : -1;
+    if (currentIdx < 0) {
+      return res.status(400).json({ error: 'Bad request', message: 'No active gameweek' });
+    }
+    const currentFixtureIds = new Set<number>(groups[currentIdx].fixtures.map((f: any) => f.fixture.id));
+    if (!currentFixtureIds.has(fixtureId)) {
       return res.status(400).json({ error: 'Bad request', message: 'Stealing is only allowed for the current gameweek' });
     }
-    if (!prevDate) {
+    if (!prevDate || prevIdx < 0) {
       return res.status(400).json({ error: 'Bad request', message: 'No previous gameweek — steal not available for the first gameweek' });
     }
+    const prevFixtureIds = new Set<number>(groups[prevIdx].fixtures.map((f: any) => f.fixture.id));
 
     // Verify the steal criterion: victim repeated a team vs their previous GW pick
-    const prevPick = await db.collection('match_selection_history').findOne({
+    const prevPicks = await db.collection('match_selection_history').find({
       username: targetSelection.username,
-      date: { $regex: `^${prevDate}` },
-    });
-    if (!prevPick) {
+      fixtureId: { $in: Array.from(prevFixtureIds) },
+    }).toArray();
+    if (prevPicks.length === 0) {
       return res.status(400).json({ error: 'Bad request', message: 'Target pick does not meet steal criteria' });
     }
-    const prevTeams = new Set([prevPick.homeTeam, prevPick.awayTeam]);
-    if (!prevTeams.has(targetSelection.homeTeam) && !prevTeams.has(targetSelection.awayTeam)) {
+    const repeated = prevPicks.some(prevPick => {
+      const prevTeams = new Set([prevPick.homeTeam, prevPick.awayTeam]);
+      return prevTeams.has(targetSelection.homeTeam) || prevTeams.has(targetSelection.awayTeam);
+    });
+    if (!repeated) {
       return res.status(400).json({ error: 'Bad request', message: 'Target pick does not meet steal criteria' });
     }
 
