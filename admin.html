@@ -87,6 +87,40 @@
           </div>
         </div>
 
+        <!-- Admin Backfill Card -->
+        <div class="card">
+          <div class="card-content">
+            <span class="card-title">Assign Previous Gameweek Match</span>
+            <p>Manually assign a finished fixture to a user (writes to history).</p>
+            <form id="assignPreviousMatchForm" class="row" style="margin-top: 8px; margin-bottom: 0;">
+              <div class="input-field col s12 m4">
+                <input id="assignUsername" type="text" required>
+                <label for="assignUsername">Username</label>
+              </div>
+              <div class="input-field col s12 m2">
+                <input id="assignSeason" type="number" min="2000" max="2100" required>
+                <label for="assignSeason">Season</label>
+              </div>
+              <div class="input-field col s12 m4">
+                <select id="assignFixtureSelect" class="browser-default" required>
+                  <option value="">Loading finished fixtures…</option>
+                </select>
+              </div>
+              <div class="col s12 m2" style="display:flex; align-items:center; min-height:72px; gap:8px;">
+                <button id="refreshAssignFixturesBtn" class="btn-flat waves-effect" type="button" title="Reload fixture list for selected season" style="padding:0 10px;">
+                  <i class="material-icons">refresh</i>
+                </button>
+                <button class="btn waves-effect waves-light" type="submit" style="width:100%;">
+                  <i class="material-icons left">playlist_add</i>Assign
+                </button>
+              </div>
+              <div class="col s12">
+                <span id="assignPreviousMatchMsg"></span>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <h5>Static Users</h5>
         <ul id="userList" class="collection"></ul>
 

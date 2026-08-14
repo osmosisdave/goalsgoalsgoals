@@ -572,6 +572,85 @@ app.post('/api/admin/sync-fixtures', requireAdmin, async (req: Request<{}, {}, S
   }
 });
 
+// Assign a fixture from a previous gameweek to a user (admin only).
+// This writes directly to match_selection_history for finished fixtures.
+app.post('/api/admin/assign-previous-match', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    if (!mongoClient) {
+      return res.status(503).json({ error: 'Database not connected' });
+    }
+
+    const { username, fixtureId } = req.body || {};
+    const parsedFixtureId = parseInt(fixtureId, 10);
+    if (!username || Number.isNaN(parsedFixtureId)) {
+      return res.status(400).json({ error: 'Missing or invalid fields', message: 'username and fixtureId are required' });
+    }
+
+    const user = await getUserForAuth(username);
+    if (!user || user.role === 'admin') {
+      return res.status(404).json({ error: 'User not found', message: 'Target user must be a non-admin user' });
+    }
+
+    const db = mongoClient.db('goalsgoalsgoals');
+    const fixture = await db.collection('fixtures').findOne({ 'fixture.id': parsedFixtureId });
+
+    if (!fixture) {
+      return res.status(404).json({ error: 'Fixture not found' });
+    }
+
+    if (fixture.fixture?.status?.short !== 'FT') {
+      return res.status(400).json({
+        error: 'Fixture not finished',
+        message: 'Only finished fixtures can be assigned to a previous gameweek history',
+      });
+    }
+
+    const datePrefix = String(fixture.fixture?.date || '').slice(0, 10);
+    if (!datePrefix) {
+      return res.status(400).json({ error: 'Invalid fixture date' });
+    }
+
+    // Keep one pick per user per gameweek date.
+    await db.collection('match_selections').deleteMany({
+      username,
+      date: { $regex: `^${datePrefix}` },
+    });
+
+    await db.collection('match_selection_history').deleteMany({
+      username,
+      date: { $regex: `^${datePrefix}` },
+    });
+
+    await db.collection('match_selection_history').insertOne({
+      username,
+      fixtureId: parsedFixtureId,
+      selectedAt: new Date(),
+      date: fixture.fixture.date,
+      homeTeam: fixture.teams?.home?.name,
+      awayTeam: fixture.teams?.away?.name,
+      leagueId: fixture.league?.id,
+      leagueName: fixture.league?.name,
+      round: fixture.league?.round,
+      season: fixture.league?.season,
+      status: fixture.fixture?.status?.short,
+      archivedAt: new Date(),
+      finalScore: {
+        home: fixture.goals?.home ?? null,
+        away: fixture.goals?.away ?? null,
+      },
+      matchStatus: fixture.fixture?.status?.long || 'Finished',
+    });
+
+    res.json({
+      success: true,
+      message: `Assigned ${fixture.teams?.home?.name} vs ${fixture.teams?.away?.name} to ${username}`,
+    });
+  } catch (error: any) {
+    console.error('Error assigning previous match:', error);
+    res.status(500).json({ error: 'Failed to assign previous match', message: error.message });
+  }
+});
+
 // Mock external API call endpoint (for testing rate limiting)
 app.post('/api/football/fixtures', async (req: Request, res: Response) => {
   try {
@@ -1374,15 +1453,20 @@ app.get('/api/standings', async (req: Request, res: Response) => {
     const users = await readUsers();
     const regularUsers = users.filter(u => u.role !== 'admin');
 
-    // Get all match selections with status FT (finished)
-    const selections = await db.collection('match_selections').find({
-      status: 'FT'
-    }).toArray();
+    const usernames = regularUsers.map(u => u.username);
 
-    // Get all finished fixtures to calculate results
-    const fixtureIds = selections.map(s => s.fixtureId);
+    // Pull all user selections (current + archived history). We evaluate whether
+    // a selection counts by joining to finished fixtures in the selected season.
+    const [activeSelections, historicalSelections] = await Promise.all([
+      db.collection('match_selections').find({ username: { $in: usernames } }).toArray(),
+      db.collection('match_selection_history').find({ username: { $in: usernames } }).toArray(),
+    ]);
+    const selections = [...activeSelections, ...historicalSelections];
+
+    // Get all finished fixtures for this season; this makes standings update as
+    // soon as fixture results are added, even before archive jobs are run.
     const allFinishedFixtures = await db.collection('fixtures').find({
-      'fixture.id': { $in: fixtureIds },
+      'league.season': seasonFilter,
       'fixture.status.short': 'FT'
     }).toArray();
 
@@ -1393,8 +1477,7 @@ app.get('/api/standings', async (req: Request, res: Response) => {
       .filter((season): season is number => typeof season === 'number' && !Number.isNaN(season))
       .sort((a, b) => b - a);
 
-    // Filter fixtures to the requested season
-    const fixtures = allFinishedFixtures.filter(f => f.league?.season === seasonFilter);
+    const fixtures = allFinishedFixtures;
 
     // Create a map of fixture results
     const fixtureMap = new Map();
@@ -1419,6 +1502,12 @@ app.get('/api/standings', async (req: Request, res: Response) => {
       });
     });
 
+    const finishedDateSet = new Set(
+      fixtures.map(f => String(f.fixture?.date || '').slice(0, 10)).filter(Boolean)
+    );
+    const seasonGameweekDates = await buildQualifyingDates(db, seasonFilter);
+    const completedGameweekDates = seasonGameweekDates.filter(d => finishedDateSet.has(d));
+
     // Calculate stats for each user
     const userStats = regularUsers.map(user => {
       const userSelections = selections.filter(s => s.username === user.username);
@@ -1432,7 +1521,14 @@ app.get('/api/standings', async (req: Request, res: Response) => {
 
       let PL = 0;
 
+      const dedupedSelections = new Map<number, any>();
       userSelections.forEach(selection => {
+        if (!dedupedSelections.has(selection.fixtureId)) {
+          dedupedSelections.set(selection.fixtureId, selection);
+        }
+      });
+
+      Array.from(dedupedSelections.values()).forEach(selection => {
         const fixtureData = fixtureMap.get(selection.fixtureId);
         if (fixtureData) {
           PL++;
@@ -1451,7 +1547,18 @@ app.get('/api/standings', async (req: Request, res: Response) => {
         }
       });
 
-      const points = (GGG * 3) + (G0 * 1) + (Z0 * -1);
+      const selectedGameweekDates = new Set(
+        Array.from(dedupedSelections.values())
+          .map(s => String(s.date || '').slice(0, 10))
+          .filter(Boolean)
+      );
+
+      const isAssignedLeagueUser = !!(user.league && String(user.league).trim() && user.league !== 'Unassigned');
+      const missedGameweeks = isAssignedLeagueUser
+        ? completedGameweekDates.filter(d => !selectedGameweekDates.has(d)).length
+        : 0;
+
+      const points = (GGG * 3) + (G0 * 1) + (Z0 * -1) - (missedGameweeks * 3);
       const ppg = PL > 0 ? points / PL : 0;
 
       return {

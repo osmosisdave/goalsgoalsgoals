@@ -52,3 +52,5 @@ server/oauth-client.json
 *.tsbuildinfo
 
 server/oauth-token.json
+
+server/oauth-token.json.bak*

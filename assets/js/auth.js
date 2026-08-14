@@ -67,6 +67,24 @@ export async function createUser(username, password, role = 'user') {
     }
     return await res.json();
 }
+export async function assignPreviousMatch(username, fixtureId) {
+    const token = getToken();
+    if (!token)
+        throw new Error('Not authenticated');
+    const res = await fetch(apiUrl('/api/admin/assign-previous-match'), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ username, fixtureId }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'Failed to assign previous match');
+    }
+    return await res.json();
+}
 // UI wiring for login.html and admin.html (calls server endpoints)
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('loginForm');
@@ -148,6 +166,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 catch (e) {
                     if (msg) {
                         msg.textContent = e.message || 'Error';
+                        msg.className = 'red-text';
+                    }
+                }
+            });
+        }
+        const assignForm = document.getElementById('assignPreviousMatchForm');
+        if (assignForm) {
+            assignForm.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const username = document.getElementById('assignUsername').value.trim();
+                const fixtureId = parseInt(document.getElementById('assignFixtureId').value, 10);
+                const msg = document.getElementById('assignPreviousMatchMsg');
+                if (!username || Number.isNaN(fixtureId)) {
+                    if (msg) {
+                        msg.textContent = 'Please provide valid username and fixture ID.';
+                        msg.className = 'red-text';
+                    }
+                    return;
+                }
+                try {
+                    const result = await assignPreviousMatch(username, fixtureId);
+                    if (msg) {
+                        msg.textContent = result.message || 'Assigned.';
+                        msg.className = 'green-text';
+                    }
+                }
+                catch (e) {
+                    if (msg) {
+                        msg.textContent = e.message || 'Error assigning previous match';
                         msg.className = 'red-text';
                     }
                 }

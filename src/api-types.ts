@@ -315,6 +315,13 @@ export interface SyncFixturesResponse {
   summary: SyncSummary;
 }
 
+// ----- POST /api/admin/assign-previous-match -----
+
+export interface AssignPreviousMatchResponse {
+  success: boolean;
+  message: string;
+}
+
 // ----- POST /api/football/fixtures  |  POST /api/football/standings (mock, rate-limited) -----
 
 export interface RateLimitedMockResponse {
