@@ -70,7 +70,7 @@ import type {
 
   async function fetchSelections(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/matches/selections`);
+      const response = await fetch(`${API_BASE_URL}/api/matches/selections?season=${selectedSeason}&includeHistory=true`);
       if (response.ok) {
         const data: SelectionsResponse = await response.json();
         matchSelections = {};
