@@ -7,6 +7,24 @@ Goals Goals Goals is a football league management web app. It shows fixtures, st
 
 ---
 
+## Response Style
+
+- Respond with code and minimal commentary.
+- Do not restate the user's question.
+- Do not summarize what code does unless explicitly asked.
+- Skip preamble and sign-off remarks.
+- Never reprint unchanged code.
+- When editing existing code, show only the changed lines or a minimal diff, and say in one line what changed and where.
+- If a task looks like it will require a long response, a long code file, a long explanation, or multi-file changes, say so in one line and ask for confirmation before producing it.
+- Respect explicit planning mode.
+- If the user says `plan only`, respond with a concise numbered plan and no code.
+- Wait for the user to say `implement` or `go ahead` before writing any code.
+- Flag likely model routing mistakes.
+- If a request is trivial, such as a one line fix, a syntax question, or a small refactor, and seems like it could have been handled by a cheaper or faster model, say so briefly at the start of the response.
+- Avoid speculative extra work.
+- Do not generate tests, documentation, alternative approaches, or extra examples unless explicitly requested.
+- When uncertain about scope, ask a clarifying question rather than generating multiple versions or covering every possibility.
+
 ## Architecture
 
 | Layer | Location | Language | Runs On |
