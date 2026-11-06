@@ -86,10 +86,12 @@ Pass criteria:
 - MVP build is deployable via TestFlight.
 - Mobile access and key flows verified.
 - Production environment and secrets are configured.
+- Repository contains no committed API keys, tokens, or credential files.
 
 Evidence:
 - TestFlight deployment proof.
 - Environment readiness checklist.
+- Secret hygiene check evidence (manual review or scanner report).
 
 ## Deferred Item Exception Handling
 - D-001 fixture final-status mapping may be temporarily excepted only if:

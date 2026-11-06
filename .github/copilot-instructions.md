@@ -1,170 +1,136 @@
-# AI Instructions — Goals Goals Goals
+# AI Instructions — Goals Goals Goals (v2 Greenfield)
 
-## Project Overview
-Goals Goals Goals is a football league management web app. It shows fixtures, standings, and match selections across 6 major leagues, with user authentication and admin tools. The project is production-deployed on Render but also runs locally.
+## Project State
+This repository has been reset for a **new v2 implementation**.
 
-**Priorities:** reliability, minimal regressions, simple UI, clear API contracts.
+- Treat old architecture and old contracts as deprecated.
+- Build from `docs/v2` specifications first.
+- Prioritize readability, small changes, and learning-oriented implementation.
 
----
+## Source of Truth
+Use these docs as primary references before coding:
 
-## Response Style
+- `docs/v2/discovery-decisions.md`
+- `docs/v2/mvp-requirements.md`
+- `docs/v2/release-gates.md`
+- `docs/v2/test-strategy-playwright.md`
+- `docs/v2/traceability-matrix.md`
+- `docs/v2/technical-implementation.md`
 
-- Respond with code and minimal commentary.
-- Do not restate the user's question.
-- Do not summarize what code does unless explicitly asked.
-- Skip preamble and sign-off remarks.
-- Never reprint unchanged code.
-- When editing existing code, show only the changed lines or a minimal diff, and say in one line what changed and where.
-- If a task looks like it will require a long response, a long code file, a long explanation, or multi-file changes, say so in one line and ask for confirmation before producing it.
-- Respect explicit planning mode.
-- If the user says `plan only`, respond with a concise numbered plan and no code.
-- Wait for the user to say `implement` or `go ahead` before writing any code.
-- Flag likely model routing mistakes.
-- If a request is trivial, such as a one line fix, a syntax question, or a small refactor, and seems like it could have been handled by a cheaper or faster model, say so briefly at the start of the response.
-- Avoid speculative extra work.
-- Do not generate tests, documentation, alternative approaches, or extra examples unless explicitly requested.
-- When uncertain about scope, ask a clarifying question rather than generating multiple versions or covering every possibility.
-
-## Architecture
-
-| Layer | Location | Language | Runs On |
-|---|---|---|---|
-| Frontend | `/` (root HTML + `/assets/`) | HTML, CSS, TypeScript (preferred) / JS | Python HTTP server (port 8000) |
-| Frontend TS source | `/src/` | TypeScript → compiled to root | Build via `npm run build` |
-| Backend | `/server/src/` | TypeScript → Express | Node.js (port 4000) |
-| Data | `/server/` | JSON files or MongoDB | File or Atlas |
-
-**Key entry points:**
-- Backend server: `server/src/server.ts` (compiles to `server/dist/server.js`)
-- Frontend config: `assets/js/config.js` — controls API origin and mock mode
-- Start both servers: `./start.sh` (use `--mongodb` flag for MongoDB)
-- Stop servers: `./stop.sh`
+If code conflicts with docs, docs win unless the user explicitly changes a decision.
 
 ---
 
-## Tech Stack
+## Response Style (Hands-On Build Mode)
 
-- **Frontend:** HTML5, CSS3, TypeScript (preferred for all new logic), plain JS only for config/env files that cannot be compiled
-- **Backend:** Node.js, Express, TypeScript
-- **Auth:** JWT (`jsonwebtoken`), password hashing (`bcryptjs`)
-- **Database:** MongoDB (Atlas or local) **or** JSON files (`users.json`, `leagues.json`)
-- **External API:** API-Football v3 (free tier — 100 calls/week hard limit)
-- **Rate Limiter:** Custom rolling-window tracker (`server/src/api-rate-limiter.ts`)
-- **Build:** `tsc` (both frontend and backend have separate `tsconfig.json` files)
-
----
-
-## Running & Building
-
-> **Security:** Always use `--ignore-scripts` with `npm install` to prevent postinstall script execution.
-
-```bash
-# Start both servers (file storage)
-./start.sh
-
-# Start with MongoDB
-./start.sh --mongodb
-
-# Build backend only
-cd server && npm run build
-
-# Build frontend TS only
-npm run build   # from root
-
-# View logs
-tail -f logs/backend.log
-tail -f logs/frontend.log
-```
+- Keep implementation steps **small and readable**.
+- Prefer incremental PR-sized changes over large drops.
+- Explain intent briefly before major edits.
+- When asked, include short “why” notes to help the user learn the codebase.
+- Avoid speculative features and avoid broad refactors without approval.
+- Respect planning mode: if user says `plan only`, provide plan without code.
+- Wait for explicit `implement`/`go ahead` before substantial multi-file work.
 
 ---
 
-## Coding Rules
+## v2 Architecture (Target)
 
-- **Match existing style** — indentation, naming, and patterns already in the file.
-- **Keep changes minimal and focused** — don't refactor unrelated code.
-- **TypeScript first (frontend and backend)** — new frontend logic goes in `src/` as `.ts` files and is compiled to the root. Edit `.ts` source files only, never compiled `.js` output in `dist/` or root.
-- **Migrate JS to TS opportunistically** — when touching an existing `assets/js/` file for another reason, consider moving the logic to `src/` as TypeScript if the change is non-trivial. Don't migrate files you aren't already editing.
-- **Type API responses** — define interfaces for any data fetched from the backend. Avoid `any`.
-- **No new dependencies** without a clear reason and explicit approval.
-- **Pin exact versions** for all dependencies in `package.json` — never use ranges (`^`, `~`, `*`). This prevents accidentally pulling in a malicious or breaking version on the next install.
-- **Always use `--ignore-scripts`** when running `npm install` (e.g. `npm install --ignore-scripts`). This prevents malicious postinstall scripts from executing.
-- **Don't rename** public API endpoints, JSON fields, JWT payload keys, or HTML element IDs without checking every caller first.
-- **Both storage modes must work** — changes to data access must support both JSON-file and MongoDB paths.
-- **Guard all env vars** — always provide a safe fallback (e.g. `process.env.X || 'default'`).
-- **Comments:** explain *why*, not *what*. Don't add comments that just restate the code.
+### Monorepo Layout
+- `apps/api` — Fastify + TypeScript backend API.
+- `apps/web` — React + Vite + TypeScript frontend.
+- `apps/mobile` — Capacitor iOS wrapper for TestFlight distribution.
+- `packages/shared` — shared schemas/types and pure rule engine.
 
----
-
-## Domain Rules
-
-- **API rate limit:** soft limit 75, hard limit 100 calls per rolling 7-day window. Never bypass or silently skip rate limit checks.
-- **User roles:** `admin` and `user`. Admin-only routes must always verify the `role` in the JWT payload.
-- **Auth flow:** JWT stored client-side; backend validates on each protected request. Tokens are checked in `server/src/server.ts`.
-- **Mock API mode:** controlled by `window.GGG_USE_MOCK_API` in `assets/js/config.js`. Do not hardcode mock behaviour outside of that flag.
-- **Leagues:** 6 supported leagues defined by `DEFAULT_LEAGUE_IDS` in `server/src/fixture-fetcher.ts`. Don't hardcode league IDs elsewhere.
+### Core Stack
+- Backend: Node.js 22 LTS, Fastify, Zod.
+- Frontend: React + Vite.
+- Data: MongoDB only (Atlas/local).
+- Auth: JWT with `admin` and `user` roles.
+- E2E: Playwright (Chromium lane for MVP).
 
 ---
 
-## File Layout Reference
+## Security and Dependency Rules
 
-```
-src/                         ← Frontend TypeScript source (preferred for all new logic)
-assets/js/config.js          ← API origin + mock flag — keep as JS (not compiled)
-assets/js/auth.js            ← Frontend auth helpers (migrate to src/ when editing)
-server/src/server.ts         ← All Express routes and middleware (~1250 lines)
-server/src/api-rate-limiter.ts ← Rate limiter logic
-server/src/fixture-fetcher.ts  ← External API-Football calls
-server/src/types/            ← Shared TypeScript types
-server/.env                  ← JWT_SECRET, MONGODB_URI, INIT_ADMIN_PASS (not committed)
-server/users.json            ← User store (file mode)
-server/leagues.json          ← League/fixture store (file mode)
-server/api-calls.json        ← Rate limiter call log (file mode)
-```
+- Always use exact dependency versions (no `^`, `~`, `*`).
+- Always use `--ignore-scripts` with package install commands.
+- No new dependency without explicit reason and user approval.
+- Keep secrets out of repo; rely on env vars and safe defaults.
 
----
+### Secrets and API Key Policy (Mandatory)
+- Never hardcode API keys, tokens, or credentials in source code, tests, scripts, or docs.
+- Never commit `.env` files or secret-bearing config files.
+- Use environment variables only for external API credentials (including API-Football).
+- Commit only redacted examples such as `.env.example` with placeholder values.
+- If a secret is accidentally detected in working files, stop and remove it before any further change.
+- Treat secret handling as a release blocker until resolved.
 
-## Banned Packages — Security
+### Banned Packages
+Never install:
 
-These packages are known malware and must **never** be installed under any circumstances:
+- `axios@1.14.1`
+- `plain-crypto-js@4.2.1`
 
-| Package | Version | Reason |
-|---|---|---|
-| `axios` | `1.14.1` | Contains malware — installs malicious code on the machine |
-| `plain-crypto-js` | `4.2.1` | Contains malware — installs malicious code on the machine |
-
-If either of these is ever found in `package.json` or `package-lock.json`, remove them immediately and do not run `npm install` until they are gone.
+If found, remove immediately before further install steps.
 
 ---
 
-## What To Avoid
+## Domain Rules to Enforce in Code
 
-- Large refactors or file reorganisations without explicit approval.
-- Changing the auth mechanism or JWT secret handling.
-- Removing the dual storage (file + MongoDB) capability.
-- Placeholder or stub implementations left in production paths.
-- Touching `logs/`, `dist/`, or compiled output files directly.
-- Breaking the `./start.sh` / `./stop.sh` workflow.
+Implement and preserve decisions from `docs/v2/discovery-decisions.md`, including:
 
----
+- Valid day qualification (`>= 30` valid fixtures).
+- Time windows in `Europe/London` (DST-aware).
+- Selection lock timing and repick limits.
+- Steal eligibility and cutoff behavior.
+- BTTS scoring model and tie-break order.
+- Invite-only onboarding (30-day, single-use, revocable).
+- Admin-only manual API-Football ingest.
 
-## When Making Changes
-
-1. Read the relevant source file(s) before editing.
-2. Check if the change affects both file-storage and MongoDB code paths.
-3. If an API endpoint changes, update both the backend route and any frontend caller.
-4. After backend changes: run `cd server && npm run build` to verify TypeScript compiles.
-5. After any frontend changes (new or edited `src/` files): run `npm run build` from the root.
-6. New frontend logic should be written in `src/` as TypeScript, not added to `assets/js/` as plain JS.
-7. Note any assumptions or follow-up steps clearly.
+Do not silently change domain behavior.
 
 ---
 
-## TODO List
+## Deferred Decision Handling
 
-A prioritised backlog of known technical debt lives in [`TODO.md`](../TODO.md) at the project root.
+`D-001` fixture final-status mapping is deferred.
 
-**Before starting any task:** skim `TODO.md` and check whether any items in the same file or area of code
-can be resolved as part of the current change — without scope-creeping the primary task. If a TODO item
-can be completed with minimal extra effort (e.g. already touching that function, already in that route),
-do it and mark it complete in `TODO.md`. If it would require meaningful extra work, leave it and note it
-in your response instead.
+- Build extension points/interfaces for status mapping.
+- Do not hardcode speculative status behavior as final.
+- Mark affected logic clearly and keep traceability updated.
+
+---
+
+## Implementation Discipline
+
+For each change:
+
+1. Link the change to at least one `REQ` in `traceability-matrix`.
+2. Keep functions small and names explicit.
+3. Prefer pure functions for rules in `packages/shared`.
+4. Add/update tests close to changed behavior.
+5. Keep commits scoped to one concern where possible.
+
+Avoid giant files and avoid “god modules.”
+
+---
+
+## Build Order Guidance
+
+When starting from empty scaffold:
+
+1. Monorepo/tooling foundation.
+2. Shared rule engine + unit tests.
+3. API auth/invite + core domain routes.
+4. Web UI flows (user then admin).
+5. Playwright Chromium MVP suite.
+6. TestFlight packaging readiness.
+
+---
+
+## Notes for AI Assistance
+
+- Optimize for maintainability and readability over cleverness.
+- Prefer explicit code over abstractions that hide core domain rules.
+- If scope grows, propose a smaller first slice.
+- If uncertainty remains, ask one focused question rather than guessing.

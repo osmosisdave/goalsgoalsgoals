@@ -3,6 +3,8 @@
 .env.local
 .env.*.local
 server/.env
+.env.*
+!.env.example
 
 # Logs
 logs/
@@ -47,6 +49,15 @@ admin.token
 *.token
 server/google-credentials.json
 server/oauth-client.json
+*.pem
+*.key
+*.p12
+*.p8
+*.crt
+*credentials*.json
+*oauth*token*.json
+*secret*
+*secrets*
 
 # TypeScript
 *.tsbuildinfo
