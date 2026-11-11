@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "echo \"packages/shared build scaffolded\"",
-    "test": "echo \"packages/shared tests scaffolded\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "echo \"packages/shared lint scaffolded\"",
     "typecheck": "echo \"packages/shared typecheck scaffolded\""
-  }
+  },
+  "devDependencies": { "vitest": "3.2.4" }
 }
