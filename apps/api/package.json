@@ -1,0 +1,12 @@
+{
+  "name": "@ggg/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"apps/api build scaffolded\"",
+    "test": "echo \"apps/api tests scaffolded\"",
+    "lint": "echo \"apps/api lint scaffolded\"",
+    "typecheck": "echo \"apps/api typecheck scaffolded\""
+  }
+}

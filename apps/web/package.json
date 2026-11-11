@@ -1,0 +1,12 @@
+{
+  "name": "@ggg/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"apps/web build scaffolded\"",
+    "test": "echo \"apps/web tests scaffolded\"",
+    "lint": "echo \"apps/web lint scaffolded\"",
+    "typecheck": "echo \"apps/web typecheck scaffolded\""
+  }
+}

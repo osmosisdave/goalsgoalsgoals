@@ -1,0 +1,12 @@
+{
+  "name": "@ggg/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"apps/mobile build scaffolded\"",
+    "test": "echo \"apps/mobile tests scaffolded\"",
+    "lint": "echo \"apps/mobile lint scaffolded\"",
+    "typecheck": "echo \"apps/mobile typecheck scaffolded\""
+  }
+}

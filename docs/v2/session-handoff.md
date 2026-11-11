@@ -14,9 +14,9 @@ Always read these first:
 - [security-secrets-policy.md](security-secrets-policy.md)
 
 ## Current Status (update each session)
-- Phase: Pre-implementation complete (planning and reset done)
-- Last completed step: Repository cleanup completed (legacy prototype files removed), v2 planning docs finalized, technical implementation baseline approved, copilot instructions aligned, and secrets policy/release-gate checks added.
-- Next intended step: Begin Phase A scaffold (monorepo foundation) in small readable increments: workspace/package setup -> apps/api -> apps/web -> packages/shared -> apps/mobile shell.
+- Phase: Phase A complete (foundation scaffold baseline)
+- Last completed step: Monorepo foundation scaffolded in small increments: workspace/package setup, app/package skeletons (`apps/api`, `apps/web`, `packages/shared`, `apps/mobile`), root TypeScript base config, `.env.example`, and CI lint/typecheck/test/build workflow baseline.
+- Next intended step: Begin Phase B domain core in `packages/shared`: implement pure rule engine for valid-day qualification, lock timing, steal eligibility window, BTTS scoring, and tie-break ordering with deterministic unit tests.
 - Blockers: None for scaffolding. Known deferred item remains for implementation detail: D-001 fixture final-status mapping.
 - Deferred items: D-001 fixture final-status mapping
 

@@ -1,0 +1,12 @@
+{
+  "name": "@ggg/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"packages/shared build scaffolded\"",
+    "test": "echo \"packages/shared tests scaffolded\"",
+    "lint": "echo \"packages/shared lint scaffolded\"",
+    "typecheck": "echo \"packages/shared typecheck scaffolded\""
+  }
+}
