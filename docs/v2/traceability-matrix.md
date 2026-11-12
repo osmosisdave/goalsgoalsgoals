@@ -27,8 +27,8 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 | DEC-011 | REQ-011 | Postponed/abandoned selected fixture carried by fixture ID | TST-018 | GATE-4, GATE-6 | Planned |
 | DEC-012 | REQ-012 | Consecutive-team second-day selection is stealable | TST-019 | GATE-4 | Planned |
 | DEC-013 | REQ-013 | Steal is FCFS and immediate ownership transfer | TST-020 | GATE-4 | Planned |
-| DEC-014 | REQ-014 | Steal window closes at `(day lock - 1 day)` | TST-021 | GATE-4, GATE-5 | Planned |
-| DEC-015 | REQ-015 | BTTS scoring with points `3/1/-1` | TST-022, TST-023 | GATE-4 | Planned |
+| DEC-014 | REQ-014 | Steal window closes at `(day lock - 1 day)` | TST-021 | GATE-4, GATE-5 | Implemented (shared) |
+| DEC-015 | REQ-015 | BTTS scoring with points `3/1/-1` | TST-022, TST-023 | GATE-4 | Implemented (shared) |
 | DEC-016 | REQ-016 | Tie-break order: points > goals total > wins total | TST-024 | GATE-4 | Planned |
 | DEC-017 | REQ-017 | Other users’ picks visible always with username labels | TST-025 | GATE-5 | Planned |
 | DEC-018 | REQ-018 | `stealable` marker hidden after lock | TST-026 | GATE-5 | Planned |
@@ -42,6 +42,9 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 - REQ-006 -> TST-011 (Tuesday `Europe/London` window boundaries, DST-aware)
 - REQ-006 -> TST-012 (Saturday `Europe/London` 15:00 exact + invalid timestamp handling)
 - REQ-008 -> TST-014 (`deriveDayLock()` uses earliest kickoff minus 10 minutes; empty/invalid inputs handled)
+- REQ-014 -> TST-021 (`deriveStealWindow()` cutoff = `dayLock - 24h`, inclusive cutoff boundary, invalid timestamp errors)
+- REQ-015 -> TST-022 (`scoreBttsOutcome()` BTTS => `3`)
+- REQ-015 -> TST-023 (`scoreBttsOutcome()` goal-to-nil => `1`, `0-0` => `-1`)
 
 ## Requirement-to-Release-Gate Index (Template)
 - REQ-001 -> GATE-3, GATE-7
@@ -67,3 +70,5 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 - 2026-11-06: Initial traceability baseline created.
 - 2026-11-12: Updated REQ-006 traceability to implemented with test mapping.
 - 2026-11-12: Updated REQ-008 traceability to implemented with unit-test mapping.
+- 2026-11-12: Updated REQ-014 traceability to implemented with unit-test mapping.
+- 2026-11-12: Updated REQ-015 traceability to implemented with unit-test mapping.
