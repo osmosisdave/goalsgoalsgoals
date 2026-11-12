@@ -14,14 +14,14 @@ Always read these first:
 - [security-secrets-policy.md](security-secrets-policy.md)
 
 ## Current Status (update each session)
-- Phase: Phase A complete (foundation scaffold baseline)
-- Last completed step: Monorepo foundation scaffolded in small increments: workspace/package setup, app/package skeletons (`apps/api`, `apps/web`, `packages/shared`, `apps/mobile`), root TypeScript base config, `.env.example`, and CI lint/typecheck/test/build workflow baseline.
-- Next intended step: Begin Phase B domain core in `packages/shared`: implement pure rule engine for valid-day qualification, lock timing, steal eligibility window, BTTS scoring, and tie-break ordering with deterministic unit tests.
-- Blockers: None for scaffolding. Known deferred item remains for implementation detail: D-001 fixture final-status mapping.
+- Phase: Phase B in progress (domain core started in `packages/shared`)
+- Last completed step: Shared domain contracts added (`types.ts`, `rule-types.ts`), export barrels wired, `vitest` configured in `@ggg/shared`, first rule implemented (`qualifyValidDay` for REQ-005), and deterministic unit tests added and passing (8/8).
+- Next intended step: Continue Phase B with REQ-006 kickoff validity logic (Europe/London Tuesday 19:00-20:00 inclusive and Saturday 15:00 exact) using test-first approach; then proceed to REQ-008 lock timing, REQ-014 steal window, REQ-015 BTTS scoring, and REQ-016 tie-break ordering.
+- Blockers: None currently. Known deferred item remains for implementation detail: D-001 fixture final-status mapping.
 - Deferred items: D-001 fixture final-status mapping
 
 ## Session Start Prompt (copy/paste)
-Use docs in `docs/v2` as the source of truth. Resume from `Current Status` in `docs/v2/session-handoff.md`. Follow small, readable, incremental implementation steps. Do not change domain rules unless explicitly asked. Keep MongoDB-only, admin-only manual API ingest, invite-only auth, Chromium Playwright MVP lane, and TestFlight MVP gate. Enforce no-committed-secrets policy.
+Use docs in `docs/v2` as the source of truth and resume from `Current Status` in `docs/v2/session-handoff.md`. Continue Phase B in `packages/shared` with small, readable, test-first increments. Next implement REQ-006 kickoff validity in Europe/London time (DST-aware), then REQ-008 lock timing, REQ-014 steal cutoff window, REQ-015 BTTS scoring, and REQ-016 tie-break ordering. Keep `D-001` as interface/extension point only (no final status mapping hardcode). Do not change domain rules unless explicitly asked. Keep MongoDB-only, admin-only manual API ingest, invite-only auth, Chromium Playwright MVP lane, TestFlight MVP gate, exact dependency versions, and no-committed-secrets policy.
 
 ## Session End Checklist
 - Update `Current Status` in this file.

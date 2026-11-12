@@ -31,6 +31,18 @@ If code conflicts with docs, docs win unless the user explicitly changes a decis
 - Respect planning mode: if user says `plan only`, provide plan without code.
 - Wait for explicit `implement`/`go ahead` before substantial multi-file work.
 
+## Pairing Preference (Guidance-First Mode)
+
+When the user asks to work collaboratively for learning/maintainability:
+
+- Do **not** create new files by default.
+- Do **not** write or apply code changes by default.
+- First provide small, step-by-step guidance the user can execute manually.
+- Explain each step briefly (what + why) so the user can maintain the code later.
+- Prefer test-first increments and pause after each step for confirmation.
+- Only generate or edit code/files after explicit permission such as `implement`, `go ahead`, or equivalent.
+- If code is requested, keep snippets minimal and focused on one concept at a time.
+
 ---
 
 ## v2 Architecture (Target)

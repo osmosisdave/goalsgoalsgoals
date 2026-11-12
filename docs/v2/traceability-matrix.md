@@ -19,9 +19,9 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 | DEC-003 | REQ-003 | MongoDB-only persistence | TST-007 | GATE-2, GATE-6 | Planned |
 | DEC-004 | REQ-004 | Admin-only manual API-Football ingest | TST-008, TST-009 | GATE-6, GATE-7 | Planned |
 | DEC-005 | REQ-005 | Valid day requires `>=30` valid fixtures | TST-010 | GATE-4 | Planned |
-| DEC-006 | REQ-006 | Valid kickoff windows in `Europe/London` | TST-011, TST-012 | GATE-4 | Planned |
+| DEC-006 | REQ-006 | Valid kickoff windows in `Europe/London` | TST-011, TST-012 | GATE-4 | Implemented (shared) |
 | DEC-007 | REQ-007 | One selection per user per valid day | TST-013 | GATE-4 | Planned |
-| DEC-008 | REQ-008 | Lock is 10 minutes before earliest valid kickoff | TST-014 | GATE-4, GATE-5 | Planned |
+| DEC-008 | REQ-008 | Lock is 10 minutes before earliest valid kickoff | TST-014 | GATE-4, GATE-5 | Implemented (shared) |
 | DEC-009 | REQ-009 | Pre-lock repick allowed; post-lock blocked | TST-015, TST-016 | GATE-4 | Planned |
 | DEC-010 | REQ-010 | No selection by lock gives `-1` | TST-017 | GATE-4 | Planned |
 | DEC-011 | REQ-011 | Postponed/abandoned selected fixture carried by fixture ID | TST-018 | GATE-4, GATE-6 | Planned |
@@ -39,10 +39,9 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 | DEC-023 | REQ-023 | Hosted backend runtime is required | TST-031 | GATE-2, GATE-8 | Planned |
 
 ## Requirement-to-Test Index (Template)
-- TST-001 …
-- TST-002 …
-- TST-003 …
-- Continue until full case inventory is defined.
+- REQ-006 -> TST-011 (Tuesday `Europe/London` window boundaries, DST-aware)
+- REQ-006 -> TST-012 (Saturday `Europe/London` 15:00 exact + invalid timestamp handling)
+- REQ-008 -> TST-014 (`deriveDayLock()` uses earliest kickoff minus 10 minutes; empty/invalid inputs handled)
 
 ## Requirement-to-Release-Gate Index (Template)
 - REQ-001 -> GATE-3, GATE-7
@@ -66,3 +65,5 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 
 ## Revision History
 - 2026-11-06: Initial traceability baseline created.
+- 2026-11-12: Updated REQ-006 traceability to implemented with test mapping.
+- 2026-11-12: Updated REQ-008 traceability to implemented with unit-test mapping.
