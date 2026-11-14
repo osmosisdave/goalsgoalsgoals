@@ -11,7 +11,8 @@
     "typecheck": "echo \"apps/api typecheck scaffolded\""
   },
     "dependencies": {
-    "@ggg/shared": "workspace:0.1.0"
+    "@ggg/shared": "workspace:0.1.0",
+    "fastify": "5.12.8"
   },
   "devDependencies": { 
     "vitest": "3.2.4",
