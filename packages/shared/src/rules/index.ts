@@ -3,3 +3,4 @@ export * from './kickoff-validity';
 export * from './day-lock';
 export * from './steal-window';
 export * from './btts-scoring';
+export * from './tie-break';

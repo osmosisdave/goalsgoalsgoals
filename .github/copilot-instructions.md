@@ -146,3 +146,13 @@ When starting from empty scaffold:
 - Prefer explicit code over abstractions that hide core domain rules.
 - If scope grows, propose a smaller first slice.
 - If uncertainty remains, ask one focused question rather than guessing.
+
+---
+
+### User Preference Override (Persistent)
+When this user requests collaborative/learning mode:
+- Do **not** create new files.
+- Do **not** edit existing files.
+- Provide step-by-step manual instructions first.
+- Provide minimal focused snippets/diffs only for the user to apply manually.
+- Wait for explicit permission before any file-writing action.

@@ -29,7 +29,7 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 | DEC-013 | REQ-013 | Steal is FCFS and immediate ownership transfer | TST-020 | GATE-4 | Planned |
 | DEC-014 | REQ-014 | Steal window closes at `(day lock - 1 day)` | TST-021 | GATE-4, GATE-5 | Implemented (shared) |
 | DEC-015 | REQ-015 | BTTS scoring with points `3/1/-1` | TST-022, TST-023 | GATE-4 | Implemented (shared) |
-| DEC-016 | REQ-016 | Tie-break order: points > goals total > wins total | TST-024 | GATE-4 | Planned |
+| DEC-016 | REQ-016 | Tie-break order: points > goals total > wins total | TST-024 | GATE-4 | Implemented (shared) |
 | DEC-017 | REQ-017 | Other users’ picks visible always with username labels | TST-025 | GATE-5 | Planned |
 | DEC-018 | REQ-018 | `stealable` marker hidden after lock | TST-026 | GATE-5 | Planned |
 | DEC-019 | REQ-019 | Recalculate standings on result updates and admin overrides | TST-027 | GATE-6 | Planned |
@@ -45,6 +45,7 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 - REQ-014 -> TST-021 (`deriveStealWindow()` cutoff = `dayLock - 24h`, inclusive cutoff boundary, invalid timestamp errors)
 - REQ-015 -> TST-022 (`scoreBttsOutcome()` BTTS => `3`)
 - REQ-015 -> TST-023 (`scoreBttsOutcome()` goal-to-nil => `1`, `0-0` => `-1`)
+- REQ-016 -> TST-024 (`orderStandingsByTieBreak()` order by points > goals > wins, non-mutating, empty input)
 
 ## Requirement-to-Release-Gate Index (Template)
 - REQ-001 -> GATE-3, GATE-7
@@ -72,3 +73,4 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 - 2026-11-12: Updated REQ-008 traceability to implemented with unit-test mapping.
 - 2026-11-12: Updated REQ-014 traceability to implemented with unit-test mapping.
 - 2026-11-12: Updated REQ-015 traceability to implemented with unit-test mapping.
+- 2026-11-12: Updated REQ-016 traceability to implemented with unit-test mapping.
