@@ -5,12 +5,17 @@ export type MongoRuntime = {
   db: Db;
 };
 
-export async function createMongoRuntimeFromEnv(): Promise<MongoRuntime> {
-  const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB_NAME;
+function requireEnv(name: 'MONGODB_URI' | 'MONGODB_DB_NAME'): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required.`);
+  }
+  return value;
+}
 
-  if (!uri) throw new Error('MONGODB_URI is required.');
-  if (!dbName) throw new Error('MONGODB_DB_NAME is required.');
+export async function createMongoRuntimeFromEnv(): Promise<MongoRuntime> {
+  const uri = requireEnv('MONGODB_URI');
+  const dbName = requireEnv('MONGODB_DB_NAME');
 
   const client = new MongoClient(uri);
   await client.connect();

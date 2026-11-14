@@ -74,3 +74,4 @@ Map discovery decisions to MVP requirements, tests, and release gates to ensure 
 - 2026-11-12: Updated REQ-014 traceability to implemented with unit-test mapping.
 - 2026-11-12: Updated REQ-015 traceability to implemented with unit-test mapping.
 - 2026-11-12: Updated REQ-016 traceability to implemented with unit-test mapping.
+- 2026-11-14: Session handoff update: confirmed local runtime requires exported `MONGODB_URI` and `MONGODB_DB_NAME`, and local Mongo startup is managed via Docker container `ggg-mongo`; no repo-committed secrets or env files.

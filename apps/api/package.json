@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"apps/api build scaffolded\"",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/start.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "echo \"apps/api lint scaffolded\"",
-    "typecheck": "echo \"apps/api typecheck scaffolded\"",
-    "start": "node --enable-source-maps src/start.ts"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
     "dependencies": {
     "@ggg/shared": "workspace:0.1.0",
