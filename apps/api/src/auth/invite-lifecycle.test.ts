@@ -7,51 +7,8 @@ import {
   revokeInvite,
   roleCanAccess,
   type InviteLifecycleDeps,
-  type InviteLifecycleStore,
-  type InviteRecord,
-  type UserRecord,
 } from './invite-lifecycle.js';
-
-class InMemoryInviteLifecycleStore implements InviteLifecycleStore {
-  public readonly invites = new Map<string, InviteRecord>();
-  public readonly users = new Map<string, UserRecord>();
-
-  public async insertInvite(invite: InviteRecord): Promise<void> {
-    this.invites.set(invite.inviteId, invite);
-  }
-
-  public async findInviteById(inviteId: string): Promise<InviteRecord | null> {
-    return this.invites.get(inviteId) ?? null;
-  }
-
-  public async findInviteByTokenHash(tokenHash: string): Promise<InviteRecord | null> {
-    for (const invite of this.invites.values()) {
-      if (invite.tokenHash === tokenHash) {
-        return invite;
-      }
-    }
-
-    return null;
-  }
-
-  public async updateInvite(invite: InviteRecord): Promise<void> {
-    this.invites.set(invite.inviteId, invite);
-  }
-
-  public async findUserByEmail(email: string): Promise<UserRecord | null> {
-    for (const user of this.users.values()) {
-      if (user.email === email) {
-        return user;
-      }
-    }
-
-    return null;
-  }
-
-  public async insertUser(user: UserRecord): Promise<void> {
-    this.users.set(user.userId, user);
-  }
-}
+import { InMemoryInviteLifecycleStore } from './in-memory-invite-lifecycle-store.js';
 
 function fixedDeps(nowIsoUtc = '2026-11-14T10:00:00.000Z'): InviteLifecycleDeps {
   let idCounter = 0;

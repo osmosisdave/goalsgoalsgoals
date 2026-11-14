@@ -8,28 +8,28 @@ type InviteCreateResponse = {
 };
 
 describe('invite lifecycle routes (REQ-001 / REQ-002)', () => {
-  const apps: Array<ReturnType<typeof buildServer>> = [];
+type App = Awaited<ReturnType<typeof buildServer>>;
 
-  async function newApp() {
-    const app = buildServer();
-    apps.push(app);
-    await app.ready();
-    return app;
-  }
+const apps: App[] = [];
 
-  async function createInviteAsAdmin(app: ReturnType<typeof buildServer>, email = 'invitee@example.com') {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/v2/admin/invites',
-      headers: {
-        'x-role': 'admin',
-        'x-user-id': 'admin-1',
-      },
-      payload: { email },
-    });
+async function newApp(): Promise<App> {
+  const app = buildServer();
+  apps.push(app);
+  await app.ready();
+  return app;
+}
 
-    return res;
-  }
+async function createInviteAsAdmin(app: App, email = 'invitee@example.com') {
+  return app.inject({
+    method: 'POST',
+    url: '/api/v2/admin/invites',
+    headers: {
+      'x-role': 'admin',
+      'x-user-id': 'admin-1',
+    },
+    payload: { email },
+  });
+}
 
   afterEach(async () => {
     await Promise.all(apps.map((app) => app.close()));

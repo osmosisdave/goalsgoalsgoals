@@ -8,11 +8,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "echo \"apps/api lint scaffolded\"",
-    "typecheck": "echo \"apps/api typecheck scaffolded\""
+    "typecheck": "echo \"apps/api typecheck scaffolded\"",
+    "start": "node --enable-source-maps src/start.ts"
   },
     "dependencies": {
     "@ggg/shared": "workspace:0.1.0",
-    "fastify": "5.12.8"
+    "fastify": "5.12.8",
+    "mongodb": "7.9.0"
   },
   "devDependencies": { 
     "vitest": "3.2.4",
