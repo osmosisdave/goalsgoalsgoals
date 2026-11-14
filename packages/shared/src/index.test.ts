@@ -6,7 +6,7 @@ import {
   qualifyKickoffValidity,
   qualifyValidDay,
   scoreBttsOutcome,
-} from './index';
+} from './index.js';
 
 describe('shared package export surface (Phase B closeout)', () => {
   it('exports the shared rule engine entry points', () => {

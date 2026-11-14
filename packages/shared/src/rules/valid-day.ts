@@ -1,7 +1,7 @@
 import type { 
     ValidDayQualificationInput,
     ValidDayQualificationResult,
-} from '../domain'
+} from '../domain/index.js';
 
 const DEFAULT_VALID_DAY_THRESHOLD = 30;
 

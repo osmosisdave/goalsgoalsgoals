@@ -1,4 +1,4 @@
-import type { KickoffValidityInput, KickoffValidityResult } from '../domain';
+import type { KickoffValidityInput, KickoffValidityResult } from '../domain/index.js';
 
 const LONDON_TIMEZONE = 'Europe/London';
 const TUESDAY = 'Tue';

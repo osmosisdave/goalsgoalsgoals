@@ -1,2 +1,2 @@
-export * from './types';
-export * from './rule-types';
+export * from './types.js';
+export * from './rule-types.js';

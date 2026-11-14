@@ -1,4 +1,4 @@
-import type { StealWindowInput, StealWindowResult } from '../domain';
+import type { StealWindowInput, StealWindowResult } from '../domain/index.js';
 
 const DEFAULT_CUTOFF_OFFSET_HOURS = 24;
 

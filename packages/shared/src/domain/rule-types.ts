@@ -3,7 +3,7 @@ import type {
   FixtureScore,
   UtcIsoDateTime,
   UserId,
-} from './types';
+} from './types.js';
 
 /**
  * REQ-005: A day is valid when it has >= threshold valid fixtures.

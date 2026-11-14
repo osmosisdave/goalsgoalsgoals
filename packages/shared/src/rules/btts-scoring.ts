@@ -1,4 +1,4 @@
-import type { BttsScoringInput, BttsScoringResult } from '../domain';
+import type { BttsScoringInput, BttsScoringResult } from '../domain/index.js';
 
 // REQ-015: BTTS scoring model and point mapping.
 export function scoreBttsOutcome(input: BttsScoringInput): BttsScoringResult {

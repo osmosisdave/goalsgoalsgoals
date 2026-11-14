@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveStealWindow } from './steal-window';
+import { deriveStealWindow } from './steal-window.js';
 
 describe('deriveStealWindow (REQ-014)', () => {
   it('uses default cutoff of 24 hours before day lock', () => {

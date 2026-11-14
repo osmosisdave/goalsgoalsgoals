@@ -1,2 +1,2 @@
-export * from './domain';
-export * from './rules';
+export * from './domain/index.js';
+export * from './rules/index.js';

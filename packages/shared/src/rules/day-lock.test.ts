@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { FixtureCandidate } from '../domain';
-import { deriveDayLock } from './day-lock';
+import type { FixtureCandidate } from '../domain/index.js';
+import { deriveDayLock } from './day-lock.js';
 
 function fixture(fixtureId: string, kickoffUtc: string): FixtureCandidate {
   return {

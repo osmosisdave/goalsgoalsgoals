@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  InviteLifecycleError,
   INVITE_TTL_DAYS,
   assertRoleCanAccess,
   createInvite,
@@ -11,7 +10,7 @@ import {
   type InviteLifecycleStore,
   type InviteRecord,
   type UserRecord,
-} from './invite-lifecycle';
+} from './invite-lifecycle.js';
 
 class InMemoryInviteLifecycleStore implements InviteLifecycleStore {
   public readonly invites = new Map<string, InviteRecord>();
@@ -132,7 +131,7 @@ describe('invite lifecycle (REQ-001)', () => {
         },
         deps,
       ),
-    ).rejects.toMatchObject<InviteLifecycleError>({ code: 'INVITE_ALREADY_USED' });
+    ).rejects.toMatchObject({ code: 'INVITE_ALREADY_USED' });
   });
 
   it('prevents redemption after revocation', async () => {
@@ -160,7 +159,7 @@ describe('invite lifecycle (REQ-001)', () => {
         },
         deps,
       ),
-    ).rejects.toMatchObject<InviteLifecycleError>({ code: 'INVITE_REVOKED' });
+    ).rejects.toMatchObject({ code: 'INVITE_REVOKED' });
   });
 
   it('prevents redemption after invite expiry', async () => {
@@ -185,7 +184,7 @@ describe('invite lifecycle (REQ-001)', () => {
         },
         fixedDeps('2026-12-14T10:00:00.001Z'),
       ),
-    ).rejects.toMatchObject<InviteLifecycleError>({ code: 'INVITE_EXPIRED' });
+    ).rejects.toMatchObject({ code: 'INVITE_EXPIRED' });
   });
 
   it('prevents redemption for mismatched email', async () => {
@@ -211,7 +210,7 @@ describe('invite lifecycle (REQ-001)', () => {
         },
         deps,
       ),
-    ).rejects.toMatchObject<InviteLifecycleError>({ code: 'INVITE_EMAIL_MISMATCH' });
+    ).rejects.toMatchObject({ code: 'INVITE_EMAIL_MISMATCH' });
   });
 });
 

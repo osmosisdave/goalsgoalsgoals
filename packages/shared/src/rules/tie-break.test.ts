@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { TieBreakRow } from '../domain';
-import { orderStandingsByTieBreak } from './tie-break';
+import type { TieBreakRow } from '../domain/index.js';
+import { orderStandingsByTieBreak } from './tie-break.js';
 
 function row(
   userId: string,

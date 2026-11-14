@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { FixtureCandidate } from '../domain';
-import { qualifyValidDay } from './valid-day';
+import type { FixtureCandidate } from '../domain/index.js';
+import { qualifyValidDay } from './valid-day.js';
 
 function fixture(id: string): FixtureCandidate {
   return {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { qualifyKickoffValidity } from './kickoff-validity';
+import { qualifyKickoffValidity } from './kickoff-validity.js';
 
 describe('qualifyKickoffValidity (REQ-006)', () => {
   it('accepts Tuesday 19:00:00 Europe/London (winter / GMT)', () => {

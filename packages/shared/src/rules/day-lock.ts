@@ -1,4 +1,4 @@
-import type { DayLockInput, DayLockResult } from '../domain';
+import type { DayLockInput, DayLockResult } from '../domain/index.js';
 
 const DEFAULT_LOCK_OFFSET_MINUTES = 10;
 

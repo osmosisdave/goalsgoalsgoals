@@ -1,4 +1,4 @@
-import type { TieBreakInput, TieBreakResult } from "../domain";
+import type { TieBreakInput, TieBreakResult } from '../domain/index.js';
 
 // REQ-016: Tie-break order is points total > goals total > wins total.
 export function orderStandingsByTieBreak(input: TieBreakInput): TieBreakResult {

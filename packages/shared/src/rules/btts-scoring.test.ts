@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scoreBttsOutcome } from './btts-scoring';
+import { scoreBttsOutcome } from './btts-scoring.js';
 
 describe('scoreBttsOutcome (REQ-015)', () => {
   it('returns WIN_BTTS and 3 points when both teams score', () => {

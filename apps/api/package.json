@@ -5,8 +5,17 @@
   "type": "module",
   "scripts": {
     "build": "echo \"apps/api build scaffolded\"",
-    "test": "echo \"apps/api tests scaffolded\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "echo \"apps/api lint scaffolded\"",
     "typecheck": "echo \"apps/api typecheck scaffolded\""
+  },
+    "dependencies": {
+    "@ggg/shared": "workspace:0.1.0"
+  },
+  "devDependencies": { 
+    "vitest": "3.2.4",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
   }
 }
